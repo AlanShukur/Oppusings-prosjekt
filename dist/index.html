@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="nb">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#7660d3">
+  <meta name="description" content="Gi hjemmet ditt nye muligheter. Utforsk planløsninger, finjuster rom og forbered oppussingsprosjektet ditt i Romly.">
+  <title>Romly – gi hjemmet nye muligheter</title>
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;450;500;550;600;650;700&family=Manrope:wght@400;500;600;650;700;750;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="Romly hjem"><span class="brand-mark" data-icon="brand"></span><span>romly<span class="brand-dot">.</span></span></a>
+    <nav class="main-nav" aria-label="Hovedmeny"><button class="nav-link active" id="projects-nav">Mine prosjekter</button><button class="nav-link" id="inspiration-nav">Inspirasjon <span class="tiny-new">NY</span></button></nav>
+    <div class="topbar-end"><button class="help-button" id="help-btn"><span data-icon="help"></span><span>Hjelp og veiledning</span></button><span class="topbar-divider"></span><button class="avatar" id="profile-btn" aria-label="Prosjektinnstillinger">AL</button></div>
+  </header>
+  <main class="app-shell">
+    <section class="project-heading">
+      <div><div class="breadcrumb"><button id="breadcrumb-home">Mine prosjekter</button><span data-icon="chevron-right"></span><span id="breadcrumb-title">Leiligheten på Grünerløkka</span></div><div class="title-row"><h1 id="project-title">Leiligheten på Grünerløkka</h1><span class="draft-badge"><span></span>Utkast</span></div><p class="project-subtitle">Små endringer. Helt nye muligheter.</p></div>
+      <div class="project-actions"><span class="save-status" id="save-status"><span data-icon="cloud"></span>Lagret på enheten</span><button class="button secondary" id="export-btn"><span data-icon="export"></span>Eksporter</button><button class="button primary" id="check-btn"><span data-icon="sparkles"></span>Sjekk prosjektet <span data-icon="arrow-right"></span></button></div>
+    </section>
+    <nav class="workflow" aria-label="Prosjektets steg">
+      <button class="workflow-step completed" data-step="1"><span class="step-number"><span data-icon="check"></span></span><span class="step-copy"><strong>Grunnlag</strong><small>Bilder og plantegning</small></span><span data-icon="chevron-right" class="step-arrow"></span></button>
+      <button class="workflow-step completed" data-step="2"><span class="step-number"><span data-icon="check"></span></span><span class="step-copy"><strong>Planforslag</strong><small>Muligheter for ditt hjem</small></span><span data-icon="chevron-right" class="step-arrow"></span></button>
+      <button class="workflow-step active" data-step="3" aria-current="step"><span class="step-number">3</span><span class="step-copy"><strong>Designstudio</strong><small>Gjør planen til din</small></span><span class="current-pill">Du er her</span><span data-icon="chevron-right" class="step-arrow"></span></button>
+      <button class="workflow-step" data-step="4"><span class="step-number">4</span><span class="step-copy"><strong>Prosjektkontroll</strong><small>Et steg nærmere realisering</small></span></button>
+    </nav>
+    <section class="studio" aria-label="Designstudio">
+      <aside class="tools-panel">
+        <div class="panel-title"><h2>Verktøykasse</h2><span data-icon="sliders"></span></div>
+        <div class="tool-tabs" role="tablist" aria-label="Verktøykategorier"><button class="active" data-tool-tab="build" role="tab" aria-selected="true">Bygg</button><button data-tool-tab="interior" role="tab" aria-selected="false">Interiør</button></div>
+        <div id="build-tools" class="tool-grid">
+          <button class="tool-button active" data-tool="select"><span data-icon="cursor"></span><span>Velg</span><kbd>V</kbd></button>
+          <button class="tool-button" data-tool="wall"><span data-icon="wall"></span><span>Vegg</span><kbd>W</kbd></button>
+          <button class="tool-button" data-tool="door"><span data-icon="door"></span><span>Dør</span><kbd>D</kbd></button>
+          <button class="tool-button" data-tool="window"><span data-icon="window"></span><span>Vindu</span><kbd>F</kbd></button>
+        </div>
+        <div id="interior-tools" class="tool-grid hidden"><button class="tool-button" data-add="sofa"><span data-icon="sofa"></span><span>Sofa</span></button><button class="tool-button" data-add="table"><span data-icon="table"></span><span>Bord</span></button><button class="tool-button" data-add="bed"><span data-icon="bed"></span><span>Seng</span></button><button class="tool-button" data-add="plant"><span data-icon="plant"></span><span>Plante</span></button></div>
+        <div class="rooms-heading"><h3>Rom i plantegningen</h3><button class="icon-button" id="add-room-btn" title="Legg til rom" aria-label="Legg til rom"><span data-icon="plus"></span></button></div>
+        <div id="room-list" class="room-list"></div>
+        <div class="layer-section"><button id="layer-heading" class="section-toggle" aria-expanded="true"><span>Vis i tegningen</span><span data-icon="chevron-down"></span></button><div id="layer-controls"><label class="check-row"><input type="checkbox" id="show-dimensions" checked><span>Mål og romnavn</span></label><label class="check-row"><input type="checkbox" id="show-furniture" checked><span>Møbler og interiør</span></label></div></div>
+        <div class="sidebar-tip"><span class="tip-icon" data-icon="bulb"></span><strong>Plass til en ny idé?</strong><p>Prøv en annen planløsning og se hjemmet med nye øyne.</p><button id="new-suggestion">Utforsk planforslag <span data-icon="arrow-right"></span></button></div>
+      </aside>
+      <div class="canvas-panel">
+        <div class="canvas-toolbar"><div class="floor-select"><span data-icon="layers"></span><button id="floor-info">1. etasje <span data-icon="chevron-down"></span></button><span class="toolbar-divider"></span><span class="plan-name">Forslag <span id="variant-name">01</span></span><span class="plan-badge">Redigerbar</span></div><div class="history-tools"><button class="icon-button" id="undo-btn" title="Angre (Ctrl+Z)" aria-label="Angre"><span data-icon="undo"></span></button><button class="icon-button" id="redo-btn" title="Gjør om (Ctrl+Shift+Z)" aria-label="Gjør om"><span data-icon="redo"></span></button><span class="toolbar-divider"></span><div class="view-switch" aria-label="Visning"><button id="view-2d" class="active" aria-pressed="true">2D</button><button id="view-3d" aria-pressed="false"><span data-icon="cube"></span>3D</button></div></div></div>
+        <div class="plan-canvas" id="plan-canvas"><div id="floorplan" class="floorplan"></div><span class="north-marker"><span>↑</span>N</span><div class="canvas-hint" id="canvas-hint"><span data-icon="cursor"></span>Klikk på et rom for å tilpasse</div><div class="canvas-bottom"><div class="canvas-legend"><span class="legend-swatch"></span>Eksisterende vegg<span class="legend-swatch proposed"></span>Ny løsning</div><div class="zoom-control"><button id="zoom-out" aria-label="Zoom ut"><span data-icon="minus"></span></button><button id="zoom-value" title="Tilbakestill zoom">100 %</button><button id="zoom-in" aria-label="Zoom inn"><span data-icon="plus"></span></button><span></span><button id="zoom-fit" aria-label="Tilpass tegningen"><span data-icon="expand"></span></button></div></div></div>
+        <div class="canvas-footer"><div><span class="green-dot"></span><span>Alle endringer lagres automatisk på enheten</span></div><button id="shortcuts-btn"><span data-icon="keyboard"></span>Hurtigtaster</button></div>
+      </div>
+      <aside class="properties-panel">
+        <div class="panel-title"><h2>Romegenskaper</h2><span class="selected-dot"></span></div>
+        <div class="selected-room-heading"><span class="room-big-icon" id="selected-room-icon" data-icon="sofa"></span><div><h3 id="selected-room-title">Stue / kjøkken</h3><p>Valgt rom</p></div><button class="icon-button" id="rename-room" aria-label="Rediger romnavn" title="Rediger romnavn"><span data-icon="edit"></span></button></div>
+        <label class="field-label" for="room-name">Romnavn</label><input class="input" id="room-name" value="Stue / kjøkken" maxlength="40">
+        <div class="dimension-fields"><label class="field-label">Bredde<div class="input-with-unit"><input id="room-width" type="number" min="1" max="12" step="0.1"><span>m</span></div></label><span class="dimension-cross">×</span><label class="field-label">Dybde<div class="input-with-unit"><input id="room-height" type="number" min="1" max="12" step="0.1"><span>m</span></div></label></div>
+        <div class="area-row"><span>Romareal</span><strong id="room-area">— m²</strong></div>
+        <div class="property-section"><div class="property-label"><h3>Gulv og materialer</h3><span data-icon="info"></span></div><div class="material-options"><button class="material active" data-material="#e9dfcc" aria-label="Velg lys eik" title="Lys eik"><span class="material-swatch oak"></span><span>Lys eik</span></button><button class="material" data-material="#d7bc98" aria-label="Velg varm eik" title="Varm eik"><span class="material-swatch warm"></span><span>Varm eik</span></button><button class="material" data-material="#e3e4df" aria-label="Velg fliser" title="Fliser"><span class="material-swatch tile"></span><span>Fliser</span></button></div></div>
+        <div class="room-elements"><button class="element-row" id="add-window"><span data-icon="window"></span><span>Legg til vindu</span><span data-icon="plus"></span></button><button class="element-row" id="add-door"><span data-icon="door"></span><span>Legg til dør</span><span data-icon="plus"></span></button></div>
+        <div class="insight-card"><div class="insight-heading"><span data-icon="sparkles"></span><strong>En tanke fra Romly</strong><span class="demo-badge">TIPS</span></div><p>En åpen stue- og kjøkkenløsning gir mer rom for både hverdagsliv og gjester.</p><button id="insight-btn">Se hva du bør tenke på <span data-icon="arrow-right"></span></button></div>
+        <button class="delete-room" id="delete-selection"><span data-icon="trash"></span>Fjern valgt element</button>
+      </aside>
+    </section>
+    <section class="project-summary"><div class="summary-intro"><span class="summary-icon" data-icon="home"></span><div><strong>Hjemmet ditt, i tall</strong><span>En plan med plass til mer.</span></div></div><div class="summary-stat"><strong id="total-area">— <small>m²</small></strong><span>Tegnet areal</span></div><div class="summary-stat"><strong id="bedroom-count">2</strong><span>Soverom</span></div><div class="summary-stat"><strong id="bath-count">1</strong><span>Bad</span></div><div class="summary-note"><span data-icon="shield"></span><div><strong>Fra idé til gjennomførbar plan</strong><span>Vi hjelper deg å stille de riktige spørsmålene.</span></div><button id="summary-check" aria-label="Åpne prosjektkontroll"><span data-icon="arrow-right"></span></button></div></section>
+    <footer class="page-footer"><span>Skapt for hjem med muligheter.</span><span class="prototype-label">Interaktiv prototype <span>·</span> Eksempelprosjekt</span></footer>
+  </main>
+  <dialog id="app-dialog"><div id="dialog-content"></div></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp,application/pdf" multiple hidden>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

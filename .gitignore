@@ -1,0 +1,6 @@
+.qa-profile/
+.qa/
+node_modules/
+*.tar.gz
+.sites-runtime/
+qa.mjs
