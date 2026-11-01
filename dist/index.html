@@ -2,7 +2,7 @@
 <html lang="nb">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
   <meta name="theme-color" content="#7660d3">
   <meta name="description" content="Gi hjemmet ditt nye muligheter. Utforsk planløsninger, finjuster rom og forbered oppussingsprosjektet ditt i Romly.">
   <title>Romly – gi hjemmet nye muligheter</title>
@@ -11,6 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;450;500;550;600;650;700&family=Manrope:wght@400;500;600;650;700;750;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./layout.css">
 </head>
 <body>
   <header class="topbar">
@@ -29,8 +30,13 @@
       <button class="workflow-step active" data-step="3" aria-current="step"><span class="step-number">3</span><span class="step-copy"><strong>Designstudio</strong><small>Gjør planen til din</small></span><span class="current-pill">Du er her</span><span data-icon="chevron-right" class="step-arrow"></span></button>
       <button class="workflow-step" data-step="4"><span class="step-number">4</span><span class="step-copy"><strong>Prosjektkontroll</strong><small>Et steg nærmere realisering</small></span></button>
     </nav>
-    <section class="studio" aria-label="Designstudio">
-      <aside class="tools-panel">
+    <section class="studio" data-panel="canvas" aria-label="Designstudio">
+      <nav class="workspace-tabs" aria-label="Arbeidsflate">
+        <button type="button" data-workspace-panel="canvas" aria-controls="workspace-canvas" aria-pressed="true"><span data-icon="layers"></span>Tegning</button>
+        <button type="button" data-workspace-panel="tools" aria-controls="workspace-tools" aria-pressed="false"><span data-icon="sliders"></span>Verktøy</button>
+        <button type="button" data-workspace-panel="properties" aria-controls="workspace-properties" aria-pressed="false"><span data-icon="edit"></span>Egenskaper</button>
+      </nav>
+      <aside class="tools-panel" id="workspace-tools" aria-label="Verktøy og rom">
         <div class="panel-title"><h2>Verktøykasse</h2><span data-icon="sliders"></span></div>
         <div class="tool-tabs" role="tablist" aria-label="Verktøykategorier"><button class="active" data-tool-tab="build" role="tab" aria-selected="true">Bygg</button><button data-tool-tab="interior" role="tab" aria-selected="false">Interiør</button></div>
         <div id="build-tools" class="tool-grid">
@@ -45,12 +51,12 @@
         <div class="layer-section"><button id="layer-heading" class="section-toggle" aria-expanded="true"><span>Vis i tegningen</span><span data-icon="chevron-down"></span></button><div id="layer-controls"><label class="check-row"><input type="checkbox" id="show-dimensions" checked><span>Mål og romnavn</span></label><label class="check-row"><input type="checkbox" id="show-furniture" checked><span>Møbler og interiør</span></label></div></div>
         <div class="sidebar-tip"><span class="tip-icon" data-icon="bulb"></span><strong>Plass til en ny idé?</strong><p>Prøv en annen planløsning og se hjemmet med nye øyne.</p><button id="new-suggestion">Utforsk planforslag <span data-icon="arrow-right"></span></button></div>
       </aside>
-      <div class="canvas-panel">
+      <div class="canvas-panel" id="workspace-canvas">
         <div class="canvas-toolbar"><div class="floor-select"><span data-icon="layers"></span><button id="floor-info">1. etasje <span data-icon="chevron-down"></span></button><span class="toolbar-divider"></span><span class="plan-name">Forslag <span id="variant-name">01</span></span><span class="plan-badge">Redigerbar</span></div><div class="history-tools"><button class="icon-button" id="undo-btn" title="Angre (Ctrl+Z)" aria-label="Angre"><span data-icon="undo"></span></button><button class="icon-button" id="redo-btn" title="Gjør om (Ctrl+Shift+Z)" aria-label="Gjør om"><span data-icon="redo"></span></button><span class="toolbar-divider"></span><div class="view-switch" aria-label="Visning"><button id="view-2d" class="active" aria-pressed="true">2D</button><button id="view-3d" aria-pressed="false"><span data-icon="cube"></span>3D</button></div></div></div>
         <div class="plan-canvas" id="plan-canvas"><div id="floorplan" class="floorplan"></div><span class="north-marker"><span>↑</span>N</span><div class="canvas-hint" id="canvas-hint"><span data-icon="cursor"></span>Klikk på et rom for å tilpasse</div><div class="canvas-bottom"><div class="canvas-legend"><span class="legend-swatch"></span>Eksisterende vegg<span class="legend-swatch proposed"></span>Ny løsning</div><div class="zoom-control"><button id="zoom-out" aria-label="Zoom ut"><span data-icon="minus"></span></button><button id="zoom-value" title="Tilbakestill zoom">100 %</button><button id="zoom-in" aria-label="Zoom inn"><span data-icon="plus"></span></button><span></span><button id="zoom-fit" aria-label="Tilpass tegningen"><span data-icon="expand"></span></button></div></div></div>
         <div class="canvas-footer"><div><span class="green-dot"></span><span>Alle endringer lagres automatisk på enheten</span></div><button id="shortcuts-btn"><span data-icon="keyboard"></span>Hurtigtaster</button></div>
       </div>
-      <aside class="properties-panel">
+      <aside class="properties-panel" id="workspace-properties" aria-label="Egenskaper for valgt rom">
         <div class="panel-title"><h2>Romegenskaper</h2><span class="selected-dot"></span></div>
         <div class="selected-room-heading"><span class="room-big-icon" id="selected-room-icon" data-icon="sofa"></span><div><h3 id="selected-room-title">Stue / kjøkken</h3><p>Valgt rom</p></div><button class="icon-button" id="rename-room" aria-label="Rediger romnavn" title="Rediger romnavn"><span data-icon="edit"></span></button></div>
         <label class="field-label" for="room-name">Romnavn</label><input class="input" id="room-name" value="Stue / kjøkken" maxlength="40">

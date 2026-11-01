@@ -1,0 +1,663 @@
+/* The app owns the viewport. Only panels and dialog content can scroll. */
+html {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.topbar {
+  flex: 0 0 auto;
+  height: clamp(48px, 7dvh, 70px);
+  padding-inline: clamp(14px, 2.4vw, 38px);
+}
+
+.app-shell {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  flex: 1 1 0;
+  gap: clamp(8px, 1.6dvh, 18px);
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: clamp(10px, 1.8dvh, 24px) clamp(12px, 2.2vw, 36px) max(8px, env(safe-area-inset-bottom));
+  overflow: hidden;
+}
+
+.project-heading,
+.workflow,
+.project-summary {
+  min-width: 0;
+  margin: 0;
+}
+
+.project-heading {
+  align-items: center;
+  gap: 16px;
+}
+
+.project-heading > div:first-child,
+.title-row,
+.breadcrumb {
+  min-width: 0;
+}
+
+.project-heading > div:first-child {
+  flex: 1;
+}
+
+.breadcrumb {
+  overflow: hidden;
+  white-space: nowrap;
+  margin-bottom: 5px;
+}
+
+#breadcrumb-title,
+#project-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#project-title {
+  min-width: 0;
+  font-size: clamp(20px, 2vw, 28px);
+}
+
+.draft-badge,
+.project-actions {
+  flex-shrink: 0;
+}
+
+.project-actions {
+  padding-top: 0;
+}
+
+.project-subtitle {
+  margin-top: 3px;
+}
+
+.workflow-step {
+  padding-block: clamp(8px, 1.25dvh, 14px);
+}
+
+.studio {
+  display: grid;
+  grid-template-columns: clamp(180px, 16vw, 238px) minmax(0, 1fr) clamp(216px, 19vw, 278px);
+  grid-template-rows: minmax(0, 1fr);
+  height: auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.workspace-tabs {
+  display: none;
+}
+
+.tools-panel,
+.properties-panel {
+  grid-row: 1;
+  grid-column: auto;
+  height: auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #d8d1e5 transparent;
+}
+
+.tools-panel > * {
+  flex-shrink: 0;
+}
+
+.properties-panel {
+  display: block;
+  border-top: 0;
+  border-left: 1px solid var(--border);
+}
+
+.canvas-panel {
+  display: flex;
+  grid-row: 1;
+  grid-column: auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 0;
+}
+
+.canvas-toolbar {
+  flex: 0 0 auto;
+  height: clamp(42px, 5.6dvh, 57px);
+}
+
+.plan-canvas {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+.floorplan {
+  inset: 3px 0 42px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.canvas-footer {
+  height: 30px;
+}
+
+.canvas-hint {
+  bottom: 55px;
+  max-width: calc(100% - 24px);
+  white-space: normal;
+  text-align: center;
+}
+
+.canvas-bottom {
+  bottom: 9px;
+}
+
+.north-marker {
+  top: 14px;
+}
+
+.project-summary {
+  display: flex;
+  flex-wrap: nowrap;
+  min-height: 0;
+  padding: 10px 18px;
+}
+
+.summary-intro {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.summary-stat {
+  flex: 0 0 auto;
+  min-width: clamp(84px, 8vw, 120px);
+  margin: 0;
+}
+
+.summary-stat strong {
+  font-size: 21px;
+}
+
+.summary-note {
+  margin-left: auto;
+}
+
+.page-footer {
+  min-width: 0;
+  padding: 0;
+}
+
+dialog[open] {
+  max-height: calc(100dvh - 24px);
+  max-width: calc(100vw - 24px);
+}
+
+.dialog-body {
+  overscroll-behavior: contain;
+}
+
+.toast {
+  max-width: calc(100vw - 24px);
+}
+
+@media (max-width: 1100px) {
+  .summary-note {
+    display: none;
+  }
+
+  .workflow-step {
+    gap: 7px;
+    padding-inline: 10px;
+  }
+}
+
+@media (max-width: 900px) {
+  .app-shell {
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    gap: 10px;
+    padding-top: 12px;
+  }
+
+  .page-footer {
+    display: none;
+  }
+
+  .project-actions {
+    padding-top: 0;
+  }
+
+  .studio {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    height: auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .workspace-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-column: 1;
+    grid-row: 1;
+    gap: 4px;
+    padding: 5px;
+    border-bottom: 1px solid var(--border);
+    background: #fff;
+  }
+
+  .workspace-tabs button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-width: 0;
+    min-height: 38px;
+    border-radius: 6px;
+    color: #777482;
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .workspace-tabs button svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .workspace-tabs button[aria-pressed="true"] {
+    color: var(--purple-dark);
+    background: var(--purple-light);
+  }
+
+  .studio > .tools-panel,
+  .studio > .canvas-panel,
+  .studio > .properties-panel {
+    display: none;
+    grid-column: 1;
+    grid-row: 2;
+    min-width: 0;
+    min-height: 0;
+    border: 0;
+  }
+
+  .studio[data-panel="canvas"] > .canvas-panel {
+    display: flex;
+  }
+
+  .studio[data-panel="tools"] > .tools-panel {
+    display: flex;
+    padding: 16px;
+  }
+
+  .studio[data-panel="properties"] > .properties-panel {
+    display: block;
+    padding: 18px;
+  }
+
+  .tools-panel > .panel-title,
+  .rooms-heading {
+    display: flex;
+  }
+
+  .room-list {
+    display: flex;
+  }
+
+  .layer-section,
+  .sidebar-tip {
+    display: block;
+  }
+
+  .tool-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 18px;
+  }
+
+  .tool-button {
+    height: 56px;
+    flex-direction: column;
+    font-size: 11px;
+  }
+
+  .tool-tabs button {
+    min-height: 36px;
+    padding-bottom: 10px;
+    font-size: 12px;
+  }
+
+  .room-row {
+    min-height: 44px;
+  }
+
+  .room-details strong {
+    font-size: 12px;
+  }
+
+  .room-details small {
+    font-size: 10px;
+  }
+
+  .room-size {
+    font-size: 11px;
+  }
+
+  .properties-panel .selected-room-heading {
+    margin: 14px 0 18px;
+  }
+
+  .properties-panel .property-section {
+    border-top: 1px solid var(--border);
+    padding-block: 15px;
+  }
+
+  .properties-panel .room-elements {
+    padding-block: 8px;
+    margin: 0;
+  }
+
+  .properties-panel .insight-card {
+    margin-top: 10px;
+  }
+
+  .properties-panel .delete-room {
+    margin: 17px auto 0;
+  }
+
+  .properties-panel .input,
+  .properties-panel .input-with-unit,
+  .properties-panel .input-with-unit input {
+    height: 40px;
+  }
+
+  .material-swatch {
+    height: 48px;
+  }
+
+  .canvas-toolbar {
+    padding-inline: 12px;
+  }
+
+  .plan-canvas {
+    min-height: 0;
+  }
+
+  .floorplan {
+    inset: 0 0 42px;
+  }
+
+  .canvas-footer > div {
+    min-width: 0;
+  }
+
+  .canvas-footer > div > span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 650px) {
+  .topbar {
+    height: 48px;
+    gap: 18px;
+  }
+
+  .app-shell {
+    gap: 8px;
+    padding: 10px 10px max(8px, env(safe-area-inset-bottom));
+  }
+
+  .project-heading {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 9px;
+  }
+
+  .breadcrumb,
+  .project-subtitle,
+  .draft-badge {
+    display: none;
+  }
+
+  .project-actions {
+    justify-content: flex-end;
+    gap: 7px;
+    padding: 0;
+  }
+
+  .project-actions .save-status {
+    min-width: 0;
+    margin-right: auto;
+    font-size: 9px;
+  }
+
+  .project-actions .button {
+    min-height: 34px;
+  }
+
+  .workflow {
+    padding: 3px;
+  }
+
+  .workflow-step {
+    gap: 4px;
+    padding: 6px 1px;
+  }
+
+  .workflow-step .step-number {
+    width: 22px;
+    height: 22px;
+  }
+
+  .workflow-step .step-copy strong {
+    font-size: 9px;
+  }
+
+  .workspace-tabs button {
+    min-height: 36px;
+    font-size: 11px;
+  }
+
+  .canvas-toolbar {
+    height: 40px;
+    padding-inline: 8px;
+  }
+
+  .floor-select {
+    min-width: 0;
+  }
+
+  .canvas-toolbar .floor-select button {
+    gap: 4px;
+  }
+
+  .history-tools {
+    flex-shrink: 0;
+  }
+
+  .canvas-hint {
+    display: none;
+  }
+
+  .project-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0;
+    padding: 8px 12px;
+  }
+
+  .summary-intro {
+    display: none;
+  }
+
+  .summary-stat {
+    min-width: 0;
+    padding-left: 14px;
+    gap: 2px;
+  }
+
+  .summary-stat:nth-child(n) {
+    grid-row: 1;
+  }
+
+  .summary-stat strong {
+    font-size: 18px;
+  }
+
+  .summary-stat > span {
+    font-size: 9px;
+  }
+
+  .dialog-header {
+    padding: 16px;
+  }
+
+  .dialog-header h2 {
+    font-size: 18px;
+    line-height: 1.4;
+  }
+
+  .dialog-body {
+    padding: 16px;
+  }
+
+  /* Keep mobile browsers from zooming the whole app when a field gets focus. */
+  .properties-panel .input,
+  .properties-panel .input-with-unit input,
+  .dialog-body .input {
+    font-size: 16px;
+  }
+}
+
+@media (max-height: 760px) {
+  .project-subtitle,
+  .page-footer {
+    display: none;
+  }
+
+  .app-shell {
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    gap: 8px;
+    padding-block: 10px;
+  }
+
+  .project-summary {
+    padding-block: 7px;
+  }
+
+  .summary-stat strong {
+    font-size: 18px;
+  }
+}
+
+@media (max-height: 600px) {
+  .topbar {
+    height: 42px;
+  }
+
+  .app-shell {
+    grid-template-rows: auto auto minmax(0, 1fr);
+    gap: 6px;
+    padding-block: 6px;
+  }
+
+  .breadcrumb,
+  .project-summary,
+  .canvas-footer,
+  .canvas-hint,
+  .north-marker {
+    display: none;
+  }
+
+  #project-title {
+    font-size: 19px;
+  }
+
+  .workflow-step {
+    flex-direction: row;
+    gap: 6px;
+    padding-block: 5px;
+  }
+
+  .workflow-step .step-copy small {
+    display: none;
+  }
+
+  .workspace-tabs {
+    padding: 3px;
+  }
+
+  .workspace-tabs button {
+    min-height: 32px;
+  }
+
+  .canvas-toolbar {
+    height: 36px;
+  }
+
+  .dialog-header {
+    padding-block: 12px;
+  }
+
+  .dialog-header p {
+    display: none;
+  }
+
+  .dialog-footer {
+    padding-block: 8px;
+  }
+}
+
+@media (max-width: 360px) {
+  .topbar {
+    gap: 12px;
+    padding-inline: 12px;
+  }
+
+  .brand {
+    font-size: 24px;
+  }
+
+  .main-nav .nav-link {
+    font-size: 9px;
+  }
+
+  .topbar-end {
+    gap: 8px;
+  }
+
+  .project-actions .save-status {
+    display: none;
+  }
+
+  .plan-name,
+  .floor-select .toolbar-divider {
+    display: none;
+  }
+
+  .workspace-tabs button {
+    gap: 5px;
+  }
+}

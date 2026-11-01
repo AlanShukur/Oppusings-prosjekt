@@ -41,6 +41,22 @@ icons();
 const $=(s)=>document.querySelector(s);
 const esc=(s)=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=(n)=>Number(n).toLocaleString('nb-NO',{maximumFractionDigits:1});
+const compactWorkspace=window.matchMedia('(max-width: 900px)');
+function setWorkspacePanel(panel){
+  if(!['canvas','tools','properties'].includes(panel))return;
+  $('.studio').dataset.panel=panel;
+  document.querySelectorAll('[data-workspace-panel]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.workspacePanel===panel)));
+  const activePanel=$('#workspace-'+panel);
+  if(compactWorkspace.matches&&document.activeElement?.closest('.tools-panel,.properties-panel,.canvas-panel')&&!activePanel.contains(document.activeElement)){
+    $('[data-workspace-panel="'+panel+'"]').focus({preventScroll:true});
+  }
+}
+document.querySelectorAll('[data-workspace-panel]').forEach(button=>button.onclick=()=>setWorkspacePanel(button.dataset.workspacePanel));
+compactWorkspace.addEventListener('change',()=>{
+  if(!compactWorkspace.matches)return;
+  const focusedPanel=document.activeElement?.closest('#workspace-tools,#workspace-properties');
+  setWorkspacePanel(focusedPanel?.id.replace('workspace-','')||$('.studio').dataset.panel);
+});
 function safeProjectJSON(text){
   const data=JSON.parse(text);
   const types=['window','door','plant','sofa','table','bed','wall'];
@@ -65,16 +81,16 @@ function renderProject(){$('#project-title').textContent=project.name;$('#breadc
 renderProject();renderRooms();selectRoom(rooms().find(r=>r.id===selectedId)||rooms()[0]);
 if(!storageAvailable)$('#save-status').textContent='Lagring utilgjengelig';
 
-$('#room-list').addEventListener('click',e=>{const row=e.target.closest('[data-room]');if(row)editor.selectRoom(row.dataset.room);});
+$('#room-list').addEventListener('click',e=>{const row=e.target.closest('[data-room]');if(row){editor.selectRoom(row.dataset.room);if(compactWorkspace.matches){setWorkspacePanel('properties');$('[data-workspace-panel="properties"]').focus({preventScroll:true});}}});
 $('#room-name').addEventListener('change',e=>{const value=e.target.value.trim();if(value)editor.updateRoom(selectedId,{name:value});else e.target.value=rooms().find(r=>r.id===selectedId)?.name||'';});
 for(const [id,key] of [['room-width','width'],['room-height','height']]){$('#'+id).addEventListener('change',e=>{const value=Number(e.target.value);if(!Number.isFinite(value)||value<1||value>12){toast('Bruk et mål mellom 1 og 12 meter.');selectRoom(rooms().find(r=>r.id===selectedId));return;}editor.updateRoom(selectedId,{[key]:value});});}
 $('#rename-room').onclick=()=>{$('#room-name').focus();$('#room-name').select();};
 document.querySelectorAll('[data-material]').forEach(b=>b.onclick=()=>editor.updateRoom(selectedId,{color:b.dataset.material}));
 function setTool(tool){activeTool=tool;editor.setTool(tool);document.querySelectorAll('[data-tool]').forEach(b=>b.classList.toggle('active',b.dataset.tool===tool));$('#canvas-hint').innerHTML=icon(tool==='select'?'cursor':tool)+({select:'Klikk på et rom for å tilpasse',wall:'Klikk to steder for å tegne en skillevegg',door:'Klikk på en vegg for å plassere en dør',window:'Klikk på en yttervegg for å plassere et vindu'}[tool]||'Klikk i plantegningen');}
-document.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>setTool(b.dataset.tool));
-document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{editor.addItem(b.dataset.add);toast('Møbelet er lagt til. Dra det til ønsket plass.');});
+document.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>{setTool(b.dataset.tool);if(compactWorkspace.matches)setWorkspacePanel('canvas');});
+document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{editor.addItem(b.dataset.add);if(compactWorkspace.matches)setWorkspacePanel('canvas');toast('Møbelet er lagt til. Dra det til ønsket plass.');});
 document.querySelectorAll('[data-tool-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-tool-tab]').forEach(x=>{x.classList.toggle('active',x===b);x.setAttribute('aria-selected',x===b);});$('#build-tools').classList.toggle('hidden',b.dataset.toolTab!=='build');$('#interior-tools').classList.toggle('hidden',b.dataset.toolTab!=='interior');setTool('select');});
-$('#add-window').onclick=()=>{setTool('window');toast('Klikk på en yttervegg for å plassere vinduet.');};$('#add-door').onclick=()=>{setTool('door');toast('Klikk på en vegg for å plassere døren.');};
+$('#add-window').onclick=()=>{setTool('window');if(compactWorkspace.matches)setWorkspacePanel('canvas');toast('Klikk på en yttervegg for å plassere vinduet.');};$('#add-door').onclick=()=>{setTool('door');if(compactWorkspace.matches)setWorkspacePanel('canvas');toast('Klikk på en vegg for å plassere døren.');};
 $('#add-room-btn').onclick=()=>openAddRoom();
 $('#delete-selection').onclick=()=>{if(!editor.removeSelected())toast('Velg en dør, et vindu eller et møbel du har lagt til først.');renderRooms();};
 $('#undo-btn').onclick=()=>editor.undo();$('#redo-btn').onclick=()=>editor.redo();
