@@ -44,7 +44,13 @@ export class PlanEditor {
   selectRoom(id){if(!this.state.rooms.some(room=>room.id===id))return;this.selected=id;this.selectedItem=null;this.render();this.onSelect(clone(this.room()));}
   checkpoint(){this.history.push(this.getState());if(this.history.length>40)this.history.shift();this.future=[];}
   notify(){this.onChange(this.getState());const room=this.room();if(room)this.onSelect(clone(room));}
-  loadState(state){if(!state||!Array.isArray(state.rooms))return;this.state={rooms:clone(state.rooms),items:clone(state.items||[]),variant:state.variant||'balanced'};this.selected=this.state.rooms[0]?.id;this.render();this.notify();}
+  loadState(state){
+    if(!state||!Array.isArray(state.rooms)||!state.rooms.length)throw new Error('Plantegningen mangler rom.');
+    this.state={rooms:clone(state.rooms),items:clone(state.items||[]),variant:state.variant||'balanced'};
+    this.history=[];this.future=[];this.drag=null;this.selectedItem=null;this.wallStart=null;this.wallEnd=null;
+    this.selected=this.state.rooms[0]?.id;
+    this.render();this.notify();
+  }
   setTool(tool){this.tool=tool;this.wallStart=null;this.wallEnd=null;this.container.dataset.tool=tool;this.container.style.cursor=['window','door','wall'].includes(tool)?'crosshair':tool==='pan'?'grab':'default';this.render();}
   setView(view){this.view=view;this.render();}
   setZoom(zoom){this.zoom=Math.max(50,Math.min(180,number(zoom)||100));this.render();}

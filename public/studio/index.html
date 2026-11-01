@@ -12,17 +12,18 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;450;500;550;600;650;700&family=Manrope:wght@400;500;600;650;700;750;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <link rel="stylesheet" href="./style.css">
   <link rel="stylesheet" href="./layout.css">
+  <link rel="stylesheet" href="./projects.css">
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="./" aria-label="Romly hjem"><span class="brand-mark" data-icon="brand"></span><span>romly<span class="brand-dot">.</span></span></a>
+    <a class="brand" href="/" aria-label="Romly hjem"><span class="brand-mark" data-icon="brand"></span><span>romly<span class="brand-dot">.</span></span></a>
     <nav class="main-nav" aria-label="Hovedmeny"><button class="nav-link active" id="projects-nav">Mine prosjekter</button><button class="nav-link" id="inspiration-nav">Inspirasjon <span class="tiny-new">NY</span></button></nav>
-    <div class="topbar-end"><button class="help-button" id="help-btn"><span data-icon="help"></span><span>Hjelp og veiledning</span></button><span class="topbar-divider"></span><button class="avatar" id="profile-btn" aria-label="Prosjektinnstillinger">AL</button></div>
+    <div class="topbar-end"><button class="help-button" id="help-btn"><span data-icon="help"></span><span>Hjelp og veiledning</span></button><span class="topbar-divider"></span><button class="avatar" id="profile-btn" aria-label="Konto og innlogging">··</button></div>
   </header>
   <main class="app-shell">
     <section class="project-heading">
-      <div><div class="breadcrumb"><button id="breadcrumb-home">Mine prosjekter</button><span data-icon="chevron-right"></span><span id="breadcrumb-title">Leiligheten på Grünerløkka</span></div><div class="title-row"><h1 id="project-title">Leiligheten på Grünerløkka</h1><span class="draft-badge"><span></span>Utkast</span></div><p class="project-subtitle">Små endringer. Helt nye muligheter.</p></div>
-      <div class="project-actions"><span class="save-status" id="save-status"><span data-icon="cloud"></span>Lagret på enheten</span><button class="button secondary" id="export-btn"><span data-icon="export"></span>Eksporter</button><button class="button primary" id="check-btn"><span data-icon="sparkles"></span>Sjekk prosjektet <span data-icon="arrow-right"></span></button></div>
+      <div><div class="breadcrumb"><button id="breadcrumb-home">Mine prosjekter</button><span data-icon="chevron-right"></span><span id="breadcrumb-title">Eksempelbolig</span></div><div class="title-row"><h1 id="project-title">Eksempelbolig</h1><span class="draft-badge"><span></span>Utkast</span></div><p class="project-subtitle">Små endringer. Helt nye muligheter.</p></div>
+      <div class="project-actions"><span class="save-status" id="save-status"><span data-icon="cloud"></span>Kobler til kontoen …</span><button class="button secondary" id="export-btn"><span data-icon="export"></span>Eksporter</button><button class="button primary" id="check-btn"><span data-icon="sparkles"></span>Sjekk prosjektet <span data-icon="arrow-right"></span></button></div>
     </section>
     <nav class="workflow" aria-label="Prosjektets steg">
       <button class="workflow-step completed" data-step="1"><span class="step-number"><span data-icon="check"></span></span><span class="step-copy"><strong>Grunnlag</strong><small>Bilder og plantegning</small></span><span data-icon="chevron-right" class="step-arrow"></span></button>
@@ -54,7 +55,7 @@
       <div class="canvas-panel" id="workspace-canvas">
         <div class="canvas-toolbar"><div class="floor-select"><span data-icon="layers"></span><button id="floor-info">1. etasje <span data-icon="chevron-down"></span></button><span class="toolbar-divider"></span><span class="plan-name">Forslag <span id="variant-name">01</span></span><span class="plan-badge">Redigerbar</span></div><div class="history-tools"><button class="icon-button" id="undo-btn" title="Angre (Ctrl+Z)" aria-label="Angre"><span data-icon="undo"></span></button><button class="icon-button" id="redo-btn" title="Gjør om (Ctrl+Shift+Z)" aria-label="Gjør om"><span data-icon="redo"></span></button><span class="toolbar-divider"></span><div class="view-switch" aria-label="Visning"><button id="view-2d" class="active" aria-pressed="true">2D</button><button id="view-3d" aria-pressed="false"><span data-icon="cube"></span>3D</button></div></div></div>
         <div class="plan-canvas" id="plan-canvas"><div id="floorplan" class="floorplan"></div><span class="north-marker"><span>↑</span>N</span><div class="canvas-hint" id="canvas-hint"><span data-icon="cursor"></span>Klikk på et rom for å tilpasse</div><div class="canvas-bottom"><div class="canvas-legend"><span class="legend-swatch"></span>Eksisterende vegg<span class="legend-swatch proposed"></span>Ny løsning</div><div class="zoom-control"><button id="zoom-out" aria-label="Zoom ut"><span data-icon="minus"></span></button><button id="zoom-value" title="Tilbakestill zoom">100 %</button><button id="zoom-in" aria-label="Zoom inn"><span data-icon="plus"></span></button><span></span><button id="zoom-fit" aria-label="Tilpass tegningen"><span data-icon="expand"></span></button></div></div></div>
-        <div class="canvas-footer"><div><span class="green-dot"></span><span>Alle endringer lagres automatisk på enheten</span></div><button id="shortcuts-btn"><span data-icon="keyboard"></span>Hurtigtaster</button></div>
+        <div class="canvas-footer"><div><span class="green-dot"></span><span>Kobler til kontoen …</span></div><button id="shortcuts-btn"><span data-icon="keyboard"></span>Hurtigtaster</button></div>
       </div>
       <aside class="properties-panel" id="workspace-properties" aria-label="Egenskaper for valgt rom">
         <div class="panel-title"><h2>Romegenskaper</h2><span class="selected-dot"></span></div>
@@ -73,6 +74,7 @@
   </main>
   <dialog id="app-dialog"><div id="dialog-content"></div></dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div id="cloud-save-banner" class="cloud-save-banner" role="alert" hidden><span id="cloud-save-message"></span><button id="retry-save-btn" type="button">Prøv igjen</button><button id="save-copy-btn" type="button">Lagre som nytt prosjekt</button><button id="backup-unsaved-btn" type="button">Last ned kopi</button></div>
   <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp,application/pdf" multiple hidden>
   <script type="module" src="./app.js"></script>
 </body>
