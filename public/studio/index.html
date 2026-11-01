@@ -7,12 +7,10 @@
   <meta name="description" content="Gi hjemmet ditt nye muligheter. Utforsk planløsninger, finjuster rom og forbered oppussingsprosjektet ditt i Romly.">
   <title>Romly – gi hjemmet nye muligheter</title>
   <link rel="icon" type="image/svg+xml" href="./favicon.svg">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;450;500;550;600;650;700&family=Manrope:wght@400;500;600;650;700;750;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <link rel="stylesheet" href="./style.css">
   <link rel="stylesheet" href="./layout.css">
   <link rel="stylesheet" href="./projects.css">
+  <link rel="stylesheet" href="./import.css">
 </head>
 <body>
   <header class="topbar">
@@ -41,6 +39,7 @@
         <div class="panel-title"><h2>Verktøykasse</h2><span data-icon="sliders"></span></div>
         <div class="tool-tabs" role="tablist" aria-label="Verktøykategorier"><button class="active" data-tool-tab="build" role="tab" aria-selected="true">Bygg</button><button data-tool-tab="interior" role="tab" aria-selected="false">Interiør</button></div>
         <div id="build-tools" class="tool-grid">
+          <button class="tool-button" data-tool="room"><span data-icon="home"></span><span>Tegn rom</span><kbd>R</kbd></button>
           <button class="tool-button active" data-tool="select"><span data-icon="cursor"></span><span>Velg</span><kbd>V</kbd></button>
           <button class="tool-button" data-tool="wall"><span data-icon="wall"></span><span>Vegg</span><kbd>W</kbd></button>
           <button class="tool-button" data-tool="door"><span data-icon="door"></span><span>Dør</span><kbd>D</kbd></button>
@@ -50,6 +49,7 @@
         <div class="rooms-heading"><h3>Rom i plantegningen</h3><button class="icon-button" id="add-room-btn" title="Legg til rom" aria-label="Legg til rom"><span data-icon="plus"></span></button></div>
         <div id="room-list" class="room-list"></div>
         <div class="layer-section"><button id="layer-heading" class="section-toggle" aria-expanded="true"><span>Vis i tegningen</span><span data-icon="chevron-down"></span></button><div id="layer-controls"><label class="check-row"><input type="checkbox" id="show-dimensions" checked><span>Mål og romnavn</span></label><label class="check-row"><input type="checkbox" id="show-furniture" checked><span>Møbler og interiør</span></label></div></div>
+        <div class="reference-controls"><button class="button secondary" id="import-floorplan"><span data-icon="upload"></span>Importer plantegning</button><div id="reference-details" hidden><span id="reference-name"></span><label class="check-row"><input type="checkbox" id="show-reference" checked><span>Vis egen plantegning</span></label><label class="field-label">Synlighet<input id="reference-opacity" type="range" min="0.1" max="1" step="0.1" value="0.7"></label><button class="text-link" id="remove-reference">Fjern tegnegrunnlaget</button></div></div>
         <div class="sidebar-tip"><span class="tip-icon" data-icon="bulb"></span><strong>Plass til en ny idé?</strong><p>Prøv en annen planløsning og se hjemmet med nye øyne.</p><button id="new-suggestion">Utforsk planforslag <span data-icon="arrow-right"></span></button></div>
       </aside>
       <div class="canvas-panel" id="workspace-canvas">
@@ -61,6 +61,7 @@
         <div class="panel-title"><h2>Romegenskaper</h2><span class="selected-dot"></span></div>
         <div class="selected-room-heading"><span class="room-big-icon" id="selected-room-icon" data-icon="sofa"></span><div><h3 id="selected-room-title">Stue / kjøkken</h3><p>Valgt rom</p></div><button class="icon-button" id="rename-room" aria-label="Rediger romnavn" title="Rediger romnavn"><span data-icon="edit"></span></button></div>
         <label class="field-label" for="room-name">Romnavn</label><input class="input" id="room-name" value="Stue / kjøkken" maxlength="40">
+        <label class="field-label room-type-label" for="room-type">Romtype</label><select class="input" id="room-type"><option value="room">Rom</option><option value="living">Stue</option><option value="bedroom">Soverom</option><option value="bath">Bad</option><option value="hall">Entré / gang</option><option value="office">Kontor</option><option value="kitchen">Kjøkken</option><option value="dining">Spisestue</option></select>
         <div class="dimension-fields"><label class="field-label">Bredde<div class="input-with-unit"><input id="room-width" type="number" min="1" max="12" step="0.1"><span>m</span></div></label><span class="dimension-cross">×</span><label class="field-label">Dybde<div class="input-with-unit"><input id="room-height" type="number" min="1" max="12" step="0.1"><span>m</span></div></label></div>
         <div class="area-row"><span>Romareal</span><strong id="room-area">— m²</strong></div>
         <div class="property-section"><div class="property-label"><h3>Gulv og materialer</h3><span data-icon="info"></span></div><div class="material-options"><button class="material active" data-material="#e9dfcc" aria-label="Velg lys eik" title="Lys eik"><span class="material-swatch oak"></span><span>Lys eik</span></button><button class="material" data-material="#d7bc98" aria-label="Velg varm eik" title="Varm eik"><span class="material-swatch warm"></span><span>Varm eik</span></button><button class="material" data-material="#e3e4df" aria-label="Velg fliser" title="Fliser"><span class="material-swatch tile"></span><span>Fliser</span></button></div></div>
@@ -76,6 +77,7 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <div id="cloud-save-banner" class="cloud-save-banner" role="alert" hidden><span id="cloud-save-message"></span><button id="retry-save-btn" type="button">Prøv igjen</button><button id="save-copy-btn" type="button">Lagre som nytt prosjekt</button><button id="backup-unsaved-btn" type="button">Last ned kopi</button></div>
   <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp,application/pdf" multiple hidden>
+  <input type="file" id="plan-file-input" accept="image/jpeg,image/png,image/webp,application/pdf" hidden>
   <script type="module" src="./app.js"></script>
 </body>
 </html>

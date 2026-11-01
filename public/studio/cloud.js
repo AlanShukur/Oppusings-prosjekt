@@ -29,6 +29,7 @@ async function request(path, options = {}) {
 
 const projectPath = id => '/api/projects/' + encodeURIComponent(id);
 export const api = {
+  bootstrap: id => request('/api/bootstrap'+(id?'?projectId='+encodeURIComponent(id):'')),
   session: () => request('/api/session'),
   list: () => request('/api/projects'),
   create: data => request('/api/projects', { method: 'POST', body: JSON.stringify(data) }),

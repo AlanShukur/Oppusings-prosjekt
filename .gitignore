@@ -17,3 +17,4 @@ next-env.d.ts
 .dev.vars*
 *.pem
 npm-debug.log*
+/public/studio/vendor/

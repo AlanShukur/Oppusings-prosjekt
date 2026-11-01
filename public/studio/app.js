@@ -1,5 +1,6 @@
 import { PlanEditor } from './plan.js';
 import { api, ProjectSync } from './cloud.js';
+import { openFloorplanFile, calibrateReference } from './reference-loader.js';
 
 const paths={
 brand:'<path d="m4 10 8-7 8 7v10h-6v-7h-4v7H4z"/><path d="M9 6V3"/>',
@@ -45,6 +46,7 @@ const fmt=(n)=>Number(n).toLocaleString('nb-NO',{maximumFractionDigits:1});
 const clone=data=>JSON.parse(JSON.stringify(data));
 let session={user:null,signInUrl:'/signin-with-chatgpt?return_to=%2F',signOutUrl:'/signout-with-chatgpt?return_to=%2F'};
 let activeRecord=null, projectList=[], loadingProject=false, transitioning=false, filesBusy=0, fileMutation=0, sessionReady=false, lastSaveStatus={state:'loading',message:'Kobler til kontoen …'}, projectDialogGeneration=0;
+let referenceAssetKey='',referenceObjectURL=null,referenceGeneration=0,dialogCleanup=null,importingPlan=false,viewGeneration=0;
 const sync=new ProjectSync(renderSaveStatus);
 const compactWorkspace=window.matchMedia('(max-width: 900px)');
 function setWorkspacePanel(panel){
@@ -75,44 +77,180 @@ let stored;
 try{stored=JSON.parse(localStorage.getItem('romly-project-v1'));}catch{}
 const storageAvailable=(()=>{try{localStorage.setItem('romly-test','1');localStorage.removeItem('romly-test');return true;}catch{return false;}})();
 function toast(message){$('#toast').textContent=message;$('#toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('visible'),3800);}
-function persist(){if(!loadingProject&&editor)sync.mark({project:clone(project),plan:editor.getState()});}
+function persist(plan){if(!loadingProject&&editor){const snapshot=plan||editor.getState();sync.mark({project:clone(project),plan:snapshot});resolveReferenceImage(snapshot);}}
 function roomIcon(r){return r?.id?.startsWith('bed')||r?.type==='bedroom'?'bed':r?.id==='bath'||r?.type==='bath'?'bath':r?.id==='hall'?'hall':'sofa';}
 function rooms(){return editor?.getState().rooms||[];}
-function renderRooms(){const list=rooms();$('#room-list').innerHTML=list.map(r=>`<button class="room-row ${r.id===selectedId?'active':''}" data-room="${esc(r.id)}"><span class="room-icon">${icon(roomIcon(r))}</span><span class="room-details"><strong>${esc(r.name)}</strong><small>${r.id==='living'?'Et sted å samles':r.id.startsWith('bed')?'Ro og hvile':r.id==='bath'?'En god start på dagen':'Velkommen hjem'}</small></span><span class="room-size">${fmt(r.area??r.width*r.height)}<small> m²</small></span></button>`).join('');$('#total-area').innerHTML=`${fmt(list.reduce((a,r)=>a+(r.area??r.width*r.height),0))} <small>m²</small>`;$('#bedroom-count').textContent=list.filter(r=>r.type==='bedroom'||r.id.startsWith('bed')||/soverom/i.test(r.name)).length;$('#bath-count').textContent=list.filter(r=>r.type==='bath'||r.id==='bath'||/^bad/i.test(r.name)).length;}
-function selectRoom(r){if(!r)return;selectedId=r.id;$('#selected-room-title').textContent=r.name;$('#room-name').value=r.name;$('#room-width').value=Number(r.width).toFixed(1);$('#room-height').value=Number(r.height).toFixed(1);$('#room-area').textContent=fmt(r.area??r.width*r.height)+' m²';$('#selected-room-icon').innerHTML=icon(roomIcon(r));document.querySelectorAll('.material').forEach(b=>b.classList.toggle('active',b.dataset.material===r.color));renderRooms();}
-editor=new PlanEditor($('#floorplan'),{onSelect:selectRoom,onChange:()=>{renderRooms();const r=rooms().find(x=>x.id===selectedId);if(r)selectRoom(r);persist();}});
+function renderRooms(){
+  const state=editor?.getState();const list=state?.rooms||[];
+  $('#room-list').innerHTML=list.length?list.map(r=>`<button class="room-row ${r.id===selectedId?'active':''}" data-room="${esc(r.id)}"><span class="room-icon">${icon(roomIcon(r))}</span><span class="room-details"><strong>${esc(r.name)}</strong><small>${r.type==='bedroom'?'Ro og hvile':r.type==='bath'?'Bad og våtrom':r.type==='room'?'Velg romtype i egenskaper':'Ditt rom'}</small></span><span class="room-size">${fmt(r.area??r.width*r.height)}<small> m²</small></span></button>`).join(''):`<div class="empty-rooms">Tegn rom oppå plantegningen for å bygge din egen modell.<button class="button secondary" id="trace-first-room">${icon('plus')} Tegn første rom</button></div>`;
+  if($('#trace-first-room'))$('#trace-first-room').onclick=()=>{setTool('room');setWorkspacePanel('canvas');};
+  $('#total-area').innerHTML=`${fmt(list.reduce((a,r)=>a+(r.area??r.width*r.height),0))} <small>m²</small>`;
+  $('#bedroom-count').textContent=list.filter(r=>r.type==='bedroom'||r.id.startsWith('bed')||/soverom/i.test(r.name)).length;
+  $('#bath-count').textContent=list.filter(r=>r.type==='bath'||r.id==='bath'||/^bad/i.test(r.name)).length;
+  const ref=state?.reference;$('#reference-details').hidden=!ref;$('#reference-name').textContent=ref?ref.name:'';if(ref)$('#reference-opacity').value=ref.opacity??0.7;
+}
+function selectRoom(r){
+  selectedId=r?.id||null;
+  $('#selected-room-title').textContent=r?.name||'Ingen rom valgt';
+  $('#room-name').value=r?.name||'';$('#room-width').value=r?Number(r.width).toFixed(1):'';$('#room-height').value=r?Number(r.height).toFixed(1):'';
+  $('#room-type').value=r?.type||'room';$('#room-area').textContent=r?fmt(r.area??r.width*r.height)+' m²':'—';$('#selected-room-icon').innerHTML=icon(roomIcon(r));
+  for(const el of document.querySelectorAll('#room-name,#room-width,#room-height,#room-type,[data-material],#rename-room'))el.disabled=!r;
+  document.querySelectorAll('.material').forEach(b=>b.classList.toggle('active',b.dataset.material===r?.color));renderRooms();
+}
+editor=new PlanEditor($('#floorplan'),{onSelect:selectRoom,onChange:state=>persist(state),onViewError:error=>{setView('2d');toast(error.message||'3D ble avbrutt. Tegningen er åpnet i 2D.');}});
 const initialPlan=editor.getState();
-function renderProject(){$('#project-title').textContent=project.name;$('#breadcrumb-title').textContent=project.name;$('#variant-name').textContent=project.variant;$('.prototype-label').textContent=activeRecord?'Tidlig produktversjon · Ditt prosjekt':'Eksempelvisning · Ikke lagret';}
-renderProject();renderRooms();selectRoom(rooms().find(r=>r.id===selectedId)||rooms()[0]);
+function renderProject(){$('#project-title').textContent=project.name;$('#breadcrumb-title').textContent=project.name;$('#variant-name').textContent=editor?.getState().variant==='custom'?'Egen':project.variant;$('.prototype-label').textContent=activeRecord?'Tidlig produktversjon · Ditt prosjekt':'Eksempelvisning · Ikke lagret';}
+renderProject();selectRoom(rooms().find(r=>r.id===selectedId)||rooms()[0]);
 renderSaveStatus(lastSaveStatus);
 
 $('#room-list').addEventListener('click',e=>{const row=e.target.closest('[data-room]');if(row){editor.selectRoom(row.dataset.room);if(compactWorkspace.matches){setWorkspacePanel('properties');$('[data-workspace-panel="properties"]').focus({preventScroll:true});}}});
 $('#room-name').addEventListener('change',e=>{const value=e.target.value.trim();if(value)editor.updateRoom(selectedId,{name:value});else e.target.value=rooms().find(r=>r.id===selectedId)?.name||'';});
+$('#room-type').onchange=e=>editor.updateRoom(selectedId,{type:e.target.value});
 for(const [id,key] of [['room-width','width'],['room-height','height']]){$('#'+id).addEventListener('change',e=>{const value=Number(e.target.value);if(!Number.isFinite(value)||value<1||value>12){toast('Bruk et mål mellom 1 og 12 meter.');selectRoom(rooms().find(r=>r.id===selectedId));return;}editor.updateRoom(selectedId,{[key]:value});});}
 $('#rename-room').onclick=()=>{$('#room-name').focus();$('#room-name').select();};
 document.querySelectorAll('[data-material]').forEach(b=>b.onclick=()=>editor.updateRoom(selectedId,{color:b.dataset.material}));
-function setTool(tool){activeTool=tool;editor.setTool(tool);document.querySelectorAll('[data-tool]').forEach(b=>b.classList.toggle('active',b.dataset.tool===tool));$('#canvas-hint').innerHTML=icon(tool==='select'?'cursor':tool)+({select:'Klikk på et rom for å tilpasse',wall:'Klikk to steder for å tegne en skillevegg',door:'Klikk på en vegg for å plassere en dør',window:'Klikk på en yttervegg for å plassere et vindu'}[tool]||'Klikk i plantegningen');}
+function setTool(tool){if(currentView==='3d'||editor.view==='loading3d')setView('2d');activeTool=tool;$('.studio').dataset.tool=tool;editor.setTool(tool);document.querySelectorAll('[data-tool]').forEach(b=>b.classList.toggle('active',b.dataset.tool===tool));$('#canvas-hint').innerHTML=icon(tool==='select'?'cursor':tool)+({select:'Klikk på et rom for å tilpasse',room:'Dra fra ett hjørne til et annet for å tegne rommet',wall:'Klikk to steder for å tegne en skillevegg',door:'Klikk på en vegg for å plassere en dør',window:'Klikk på en yttervegg for å plassere et vindu'}[tool]||'Klikk i plantegningen');}
 document.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>{setTool(b.dataset.tool);if(compactWorkspace.matches)setWorkspacePanel('canvas');});
 document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{editor.addItem(b.dataset.add);if(compactWorkspace.matches)setWorkspacePanel('canvas');toast('Møbelet er lagt til. Dra det til ønsket plass.');});
 document.querySelectorAll('[data-tool-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-tool-tab]').forEach(x=>{x.classList.toggle('active',x===b);x.setAttribute('aria-selected',x===b);});$('#build-tools').classList.toggle('hidden',b.dataset.toolTab!=='build');$('#interior-tools').classList.toggle('hidden',b.dataset.toolTab!=='interior');setTool('select');});
 $('#add-window').onclick=()=>{setTool('window');if(compactWorkspace.matches)setWorkspacePanel('canvas');toast('Klikk på en yttervegg for å plassere vinduet.');};$('#add-door').onclick=()=>{setTool('door');if(compactWorkspace.matches)setWorkspacePanel('canvas');toast('Klikk på en vegg for å plassere døren.');};
 $('#add-room-btn').onclick=()=>openAddRoom();
-$('#delete-selection').onclick=()=>{if(!editor.removeSelected())toast('Velg en dør, et vindu eller et møbel du har lagt til først.');renderRooms();};
+$('#delete-selection').onclick=()=>{if(!editor.removeSelected())toast('Velg en dør, et vindu eller et møbel du har lagt til først.');};
 $('#undo-btn').onclick=()=>editor.undo();$('#redo-btn').onclick=()=>editor.redo();
 function setZoom(value){zoom=Math.max(50,Math.min(180,value));editor.setZoom(zoom);$('#zoom-value').textContent=zoom+' %';}
 $('#zoom-out').onclick=()=>setZoom(zoom-10);$('#zoom-in').onclick=()=>setZoom(zoom+10);$('#zoom-fit').onclick=$('#zoom-value').onclick=()=>{setZoom(100);editor.resetView();setView(currentView);};
-function setView(view){currentView=view;editor.setView(view);$('#view-2d').classList.toggle('active',view==='2d');$('#view-3d').classList.toggle('active',view==='3d');$('#view-2d').setAttribute('aria-pressed',view==='2d');$('#view-3d').setAttribute('aria-pressed',view==='3d');if(view==='3d')toast('Romlig skisse. Bytt til 2D for nøyaktig redigering.');}
+async function setView(view){
+  const generation=++viewGeneration;$('#view-3d').disabled=view==='3d';
+  try{const actual=await editor.setView(view);if(generation!==viewGeneration)return;currentView=actual||view;}
+  catch(error){if(generation!==viewGeneration)return;currentView='2d';toast(error.message||'3D kunne ikke åpnes på denne enheten.');}
+  finally{if(generation===viewGeneration){$('#view-3d').disabled=false;$('.studio').dataset.view=currentView;for(const mode of ['2d','3d']){$('#view-'+mode).classList.toggle('active',currentView===mode);$('#view-'+mode).setAttribute('aria-pressed',String(currentView===mode));}}}
+}
 $('#view-2d').onclick=()=>setView('2d');$('#view-3d').onclick=()=>setView('3d');
 for(const [id,key] of [['show-dimensions','dimensions'],['show-furniture','furniture']])$('#'+id).onchange=e=>editor.setLayers({[key]:e.target.checked});
 $('#layer-heading').onclick=()=>{const expanded=$('#layer-heading').getAttribute('aria-expanded')==='true';$('#layer-heading').setAttribute('aria-expanded',!expanded);$('#layer-controls').classList.toggle('hidden',expanded);};
 
 const dialog=$('#app-dialog');let lastFocus;
-function openDialog(title,subtitle,body,footer='',wide=false){lastFocus=document.activeElement;$('#dialog-content').innerHTML=`<div class="dialog-header"><div><h2>${title}</h2><p>${subtitle}</p></div><button class="icon-button dialog-close" aria-label="Lukk">${icon('close')}</button></div><div class="dialog-body">${body}</div>${footer?`<div class="dialog-footer">${footer}</div>`:''}`;dialog.classList.toggle('wide-dialog',wide);icons(dialog);if(!dialog.open)dialog.showModal();dialog.querySelector('.dialog-close').onclick=closeDialog;}
-function closeDialog(options={}){if(transitioning&&options?.force!==true)return;dialog.close();lastFocus?.focus();document.querySelectorAll('.workflow-step').forEach(b=>{b.classList.toggle('active',b.dataset.step==='3');if(b.dataset.step==='3')b.setAttribute('aria-current','step');else b.removeAttribute('aria-current');});}
+function cleanupDialog(){if(dialogCleanup){const cleanup=dialogCleanup;dialogCleanup=null;cleanup();}}
+function openDialog(title,subtitle,body,footer='',wide=false){cleanupDialog();lastFocus=document.activeElement;$('#dialog-content').innerHTML=`<div class="dialog-header"><div><h2>${title}</h2><p>${subtitle}</p></div><button class="icon-button dialog-close" aria-label="Lukk">${icon('close')}</button></div><div class="dialog-body">${body}</div>${footer?`<div class="dialog-footer">${footer}</div>`:''}`;dialog.classList.toggle('wide-dialog',wide);icons(dialog);if(!dialog.open)dialog.showModal();dialog.querySelector('.dialog-close').onclick=closeDialog;}
+function closeDialog(options={}){if(transitioning&&options?.force!==true)return;cleanupDialog();dialog.close();lastFocus?.focus();document.querySelectorAll('.workflow-step').forEach(b=>{b.classList.toggle('active',b.dataset.step==='3');if(b.dataset.step==='3')b.setAttribute('aria-current','step');else b.removeAttribute('aria-current');});}
 dialog.addEventListener('click',e=>{if(e.target===dialog){const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)closeDialog();}});
 dialog.addEventListener('cancel',e=>{e.preventDefault();closeDialog();});
 function workflow(step){document.querySelectorAll('.workflow-step').forEach(b=>{b.classList.toggle('active',b.dataset.step===String(step));if(b.dataset.step===String(step))b.setAttribute('aria-current','step');else b.removeAttribute('aria-current');});if(step===1)openGround();if(step===2)openSuggestions();if(step===3)closeDialog();if(step===4)openCheck();}
 document.querySelectorAll('[data-step]').forEach(b=>b.onclick=()=>workflow(Number(b.dataset.step)));
+
+function releaseReferenceAsset(){
+  referenceGeneration++;referenceAssetKey='';
+  if(referenceObjectURL)URL.revokeObjectURL(referenceObjectURL);
+  referenceObjectURL=null;$('#reference-loading')?.remove();
+}
+async function resolveReferenceImage(plan=editor.getState()){
+  const ref=plan.reference;const key=ref&&activeRecord?activeRecord.id+':'+ref.fileId+':'+ref.page:'';
+  if(key===referenceAssetKey){if(editor.referenceImage!==referenceObjectURL)editor.setReferenceImage(referenceObjectURL);return;}
+  releaseReferenceAsset();referenceAssetKey=key;
+  if(!key){editor.setReferenceImage?.(null);return;}
+  const generation=referenceGeneration;
+  const file=uploads.find(item=>item.id===ref.fileId&&item.status==='ready');
+  if(!file){toast('Tegnegrunnlaget mangler i prosjektet. Last opp filen på nytt.');return;}
+  const label=document.createElement('div');label.id='reference-loading';label.className='reference-loading';label.textContent='Åpner plantegningen …';$('#plan-canvas').append(label);
+  let sourceDocument;
+  try{
+    const response=await fetch(file.url,{credentials:'same-origin',cache:'no-store'});if(!response.ok)throw new Error('Plantegningen kunne ikke lastes.');
+    sourceDocument=await openFloorplanFile(await response.blob(),file.mimeType);
+    const image=await sourceDocument.renderPage(ref.page||1);
+    if(generation!==referenceGeneration)return;
+    referenceObjectURL=URL.createObjectURL(image.blob);editor.setReferenceImage(referenceObjectURL);
+  }catch(error){if(generation===referenceGeneration){referenceAssetKey='';toast(error.message||'Plantegningen kunne ikke åpnes.');}}
+  finally{await sourceDocument?.dispose().catch(()=>{});if(generation===referenceGeneration)$('#reference-loading')?.remove();}
+}
+
+function choosePlanFile(){
+  if(!session.user){openAccount();return;}
+  if(filesBusy||transitioning||importingPlan){toast('Vent til den pågående filhandlingen er ferdig.');return;}
+  $('#plan-file-input').click();
+}
+$('#import-floorplan').onclick=choosePlanFile;
+$('#plan-file-input').onchange=async event=>{
+  const file=event.target.files[0];event.target.value='';if(!file)return;
+  if(!['image/jpeg','image/png','image/webp','application/pdf'].includes(file.type)||!file.size||file.size>20*1024*1024){toast('Bruk JPG, PNG, WebP eller PDF, maksimalt 20 MB.');return;}
+  if(!await ensureCanLeave())return;
+  try{
+    if(!activeRecord)await createCloudProject({name:file.name.replace(/\.[^.]+$/,'').slice(0,70)||'Min plantegning',municipality:'',bedrooms:2,bathrooms:1,wishes:'',variant:'01'},{rooms:[],items:[],variant:'custom'});
+    importingPlan=true;filesBusy++;fileMutation++;
+    openDialog('Importerer plantegningen','Filen lagres på kontoen før du setter målestokk.',`<p class="cloud-loading">Laster opp ${esc(file.name)} …</p>`);
+    const result=await api.upload(activeRecord.id,file);uploads.push(result.file);
+    filesBusy--;importingPlan=false;
+    await openPlanImport(result.file);
+  }catch(error){if(importingPlan){filesBusy--;importingPlan=false;}toast(error.message||'Plantegningen kunne ikke importeres.');openGround();}
+};
+$('#show-reference').onchange=e=>editor.setLayers({reference:e.target.checked});
+$('#reference-opacity').onchange=e=>{const reference=editor.getState().reference;if(reference)editor.setReference({...reference,opacity:Number(e.target.value)},{replace:false});};
+$('#remove-reference').onclick=()=>{
+  const ref=editor.getState().reference;if(!ref)return;
+  openDialog('Fjerne tegnegrunnlaget?',esc(ref.name),'<p class="account-note">Rommene og elementene du har tegnet beholdes. Den opplastede filen ligger fortsatt under Grunnlag.</p>',`<button class="button secondary" id="keep-reference">Behold underlaget</button><button class="button primary" id="confirm-remove-reference">Fjern underlaget</button>`);
+  $('#keep-reference').onclick=closeDialog;$('#confirm-remove-reference').onclick=()=>{editor.clearReference();renderProject();closeDialog();};
+};
+
+async function openPlanImport(file){
+  if(!activeRecord||!session.user){openProjects();return;}
+  if(!await ensureCanLeave())return;
+  const projectId=activeRecord.id;
+  let live=true,source=null,image=null,previewURL=null,points=[],page=1,renderGeneration=0;
+  openDialog('Bruk din egen plantegning','Sett målestokk, og tegn rommene oppå grunnlaget.',`<div class="import-intro"><p>Klikk på to punkter i tegningen med kjent avstand, og skriv lengden i meter. Etter import kan du tegne rom, dører og vinduer i studioet.</p><label class="import-page-control" id="import-page-control" hidden>Side<input class="input" id="import-page" type="number" min="1" value="1"><span id="import-page-total"></span></label></div><div class="import-drawing" id="import-drawing"><p class="import-empty">Åpner ${esc(file.name)} …</p></div><div class="import-measurements"><label class="field">Avstand mellom punktene (meter)<input class="input" id="calibration-meters" type="number" min="0.01" max="100" step="0.01" inputmode="decimal" placeholder="For eksempel 4,20"></label><button class="button secondary" id="calibration-reset">Velg punkter på nytt</button><p class="measure-help" id="calibration-measure">Marker to punkter i plantegningen.</p></div><p class="import-error" id="calibration-error" hidden></p><p class="import-warning">Dette setter målestokken på underlaget. Rommene tegner du selv; filen tolkes ikke automatisk med AI. Tegningen i studioet erstattes, og kan hentes tilbake med Angre.</p>`,`<button class="button secondary" id="calibration-cancel">Avbryt</button><button class="button primary" id="calibration-apply" disabled>${icon('layers')} Bruk tegningen i studio</button>`,true);
+  dialogCleanup=()=>{live=false;renderGeneration++;if(previewURL)URL.revokeObjectURL(previewURL);source?.dispose().catch(()=>{});};
+  const refresh=()=>{
+    if(!live||!image)return;
+    const pointMarkup=points.map((point,index)=>`<circle cx="${point.x}" cy="${point.y}" r="${Math.max(image.width/140,4)}" fill="#7961ce" stroke="white" stroke-width="${image.width/400}"/><text x="${point.x+image.width/80}" y="${point.y-image.width/100}" font-size="${image.width/45}" fill="#6951bc" font-weight="700">${index+1}</text>`).join('');
+    const line=points.length===2?`<path d="M${points[0].x} ${points[0].y}L${points[1].x} ${points[1].y}" stroke="#7961ce" stroke-width="${Math.max(image.width/450,1)}" stroke-dasharray="${image.width/120} ${image.width/180}"/>`:'';
+    $('#import-drawing').innerHTML=`<svg id="calibration-svg" viewBox="0 0 ${image.width} ${image.height}" role="img" aria-label="Plantegning. Marker to punkter for å sette målestokk."><image href="${esc(previewURL)}" width="${image.width}" height="${image.height}"/>${line}${pointMarkup}</svg>`;
+    $('#calibration-svg').onpointerdown=event=>{
+      const svg=event.currentTarget;const point=svg.createSVGPoint();point.x=event.clientX;point.y=event.clientY;const mapped=point.matrixTransform(svg.getScreenCTM().inverse());
+      if(mapped.x<0||mapped.y<0||mapped.x>image.width||mapped.y>image.height)return;
+      if(points.length===2)points=[];points.push({x:mapped.x,y:mapped.y});refresh();
+    };
+    const meters=Number($('#calibration-meters').value);let valid=false;
+    if(points.length===2&&meters>0){try{const ref=calibrateReference(file,page,image,points,meters);$('#calibration-measure').textContent=`Tegningen blir ${fmt(ref.w/50)} × ${fmt(ref.h/50)} meter.`;valid=true;$('#calibration-error').hidden=true;}catch(error){$('#calibration-error').hidden=false;$('#calibration-error').textContent=error.message;}}
+    else{$('#calibration-measure').textContent=points.length===2?'Skriv den kjente avstanden i meter.':`Marker ${points.length?'det andre punktet':'to punkter'} i plantegningen.`;$('#calibration-error').hidden=true;}
+    $('#calibration-apply').disabled=!valid;
+  };
+  const renderPage=async value=>{
+    const generation=++renderGeneration;image=null;points=[];$('#calibration-apply').disabled=true;$('#calibration-error').hidden=true;$('#calibration-measure').textContent='Vent mens siden gjøres klar.';$('#import-drawing').innerHTML='<p class="import-empty">Gjør klar siden …</p>';
+    try{const next=await source.renderPage(value);if(!live||generation!==renderGeneration)return;if(previewURL)URL.revokeObjectURL(previewURL);image=next;page=value;$('#import-page').value=String(value);previewURL=URL.createObjectURL(image.blob);refresh();}
+    catch(error){if(live&&generation===renderGeneration){$('#calibration-error').hidden=false;$('#calibration-error').textContent=error.message||'Siden kunne ikke åpnes.';}}
+  };
+  $('#calibration-cancel').onclick=closeDialog;$('#calibration-reset').onclick=()=>{points=[];refresh();};$('#calibration-meters').oninput=refresh;
+  $('#import-page').onchange=e=>{const requested=Number(e.target.value);if(source&&Number.isInteger(requested)&&requested>=1&&requested<=source.numPages)renderPage(requested);else e.target.value=page;};
+  $('#calibration-apply').onclick=async event=>{
+    const button=event.currentTarget;if(!live||!image||projectId!==activeRecord?.id)return;button.disabled=true;
+    try{
+      const reference=calibrateReference(file,page,image,points,Number($('#calibration-meters').value));
+      await withProjectTransition(async()=>{
+        await setView('2d');
+        releaseReferenceAsset();referenceAssetKey=activeRecord.id+':'+file.id+':'+page;referenceObjectURL=URL.createObjectURL(image.blob);
+        editor.setReference(reference,{replace:true});editor.setReferenceImage(referenceObjectURL);
+        selectedId=null;renderProject();zoom=100;$('#zoom-value').textContent='100 %';setTool('room');setWorkspacePanel('canvas');
+        await sync.flush();closeDialog({force:true});
+      });
+      toast('Plantegningen er importert. Dra over hvert rom for å lage modellen.');
+    }catch(error){button.disabled=false;if($('#calibration-error')){$('#calibration-error').hidden=false;$('#calibration-error').textContent=error.message;}else showSaveProblem(error);}
+  };
+  try{
+    const response=await fetch(file.url,{credentials:'same-origin',cache:'no-store'});if(!response.ok)throw new Error('Filen kunne ikke hentes fra prosjektet.');
+    const loaded=await openFloorplanFile(await response.blob(),file.mimeType);if(!live){await loaded.dispose();return;}source=loaded;
+    $('#import-page-control').hidden=source.numPages===1;$('#import-page').max=source.numPages;$('#import-page-total').textContent='av '+source.numPages;
+    await renderPage(1);
+  }catch(error){if(live){$('#import-drawing').innerHTML='<p class="import-empty">Plantegningen kunne ikke åpnes.</p>';$('#calibration-error').hidden=false;$('#calibration-error').textContent=error.message;}}
+}
+
+function openSuggestions(){
+  if(editor.getState().variant!=='custom'){openExampleSuggestions();return;}
+  openDialog('Hva ønsker du å endre?','Behovene dine lagres sammen med din egen plantegning.',`<div class="form-grid"><label class="field">Ønsket antall soverom<input class="input" id="custom-bedrooms" type="number" min="1" max="5" value="${project.bedrooms}"></label><label class="field">Ønsket antall bad<input class="input" id="custom-bathrooms" type="number" min="1" max="3" value="${project.bathrooms}"></label></div><label class="field">Dine ønsker<textarea class="input" id="custom-wishes" rows="4" maxlength="4000">${esc(project.wishes)}</textarea></label><p class="custom-needs-note">Du bruker din egen plantegning i studioet. Tegn og tilpass rommene der. Automatisk generering av planforslag fra dette underlaget er ikke tilkoblet ennå.</p>`,`<button class="button primary" id="custom-needs-save">Lagre og åpne studio ${icon('arrow-right')}</button>`);
+  $('#custom-needs-save').onclick=async()=>{const beds=Number($('#custom-bedrooms').value),baths=Number($('#custom-bathrooms').value);if(!Number.isInteger(beds)||beds<1||beds>5||!Number.isInteger(baths)||baths<1||baths>3){toast('Velg 1–5 soverom og 1–3 bad.');return;}project.bedrooms=beds;project.bathrooms=baths;project.wishes=$('#custom-wishes').value;persist();try{await sync.flush();closeDialog();}catch(error){showSaveProblem(error);}};
+}
+
+function openAddRoom(){
+  if(!rooms().length){setTool('room');setWorkspacePanel('canvas');toast('Dra fra ett hjørne til et annet for å tegne det første rommet.');return;}
+  openAddRoomDialog();
+}
 
 function uploadList(){
   if(!uploads.length)return'<p class="empty-upload">Ingen filer lagt til. Last opp bilder eller plantegninger til prosjektet.</p>';
@@ -121,7 +259,7 @@ function uploadList(){
     const pending=file.status==='pending';
     const canDelete=file.canDelete!==false;
     const message=ready?`${fmt(file.size/1024)} kB · Lagret på kontoen`:pending?(canDelete?'Opplastingen ble avbrutt. Fjern filen og prøv igjen.':'Opplasting pågår. Åpne grunnlaget igjen for oppdatert status.'):'Slettingen ble avbrutt. Prøv å fjerne filen igjen.';
-    return`<div class="upload-item">${ready&&file.mimeType?.startsWith('image/')?`<img class="upload-thumb" src="${esc(file.url)}" alt="Forhåndsvisning av ${esc(file.name)}">`:`<span class="upload-thumb">${icon('file')}</span>`}<div><strong>${esc(file.name)}</strong><small>${message}</small>${ready?`<a class="text-link" href="${esc(file.url)}" target="_blank" rel="noopener noreferrer">Åpne fil ↗</a>`:''}</div><button class="icon-button" data-remove-file="${esc(file.id)}" aria-label="${ready?'Fjern':'Prøv å fjerne'} ${esc(file.name)}" ${canDelete?'':'disabled'}>${icon('close')}</button></div>`;
+    return`<div class="upload-item">${ready&&file.mimeType?.startsWith('image/')?`<img class="upload-thumb" loading="lazy" decoding="async" src="${esc(file.url)}" alt="Forhåndsvisning av ${esc(file.name)}">`:`<span class="upload-thumb">${icon('file')}</span>`}<div><strong>${esc(file.name)}</strong><small>${message}</small>${ready?`<button class="use-floorplan" data-use-plan="${esc(file.id)}">${icon('layers')} Bruk i tegningen</button><a class="text-link" href="${esc(file.url)}" target="_blank" rel="noopener noreferrer">Åpne fil ↗</a>`:''}</div><button class="icon-button" data-remove-file="${esc(file.id)}" aria-label="${ready?'Fjern':'Prøv å fjerne'} ${esc(file.name)}" ${canDelete?'':'disabled'}>${icon('close')}</button></div>`;
   }).join('');
 }
 function refreshUploadList(){if($('#upload-list'))$('#upload-list').innerHTML=uploadList();if($('#file-upload-progress'))$('#file-upload-progress').textContent=filesBusy?'Laster opp fil. Vent til opplastingen er bekreftet …':'';}
@@ -130,7 +268,10 @@ function bindUploads(){
   zone.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();$('#file-input').click();}};
   zone.ondragover=e=>{e.preventDefault();zone.classList.add('drag-over');};zone.ondragleave=()=>zone.classList.remove('drag-over');
   zone.ondrop=e=>{e.preventDefault();zone.classList.remove('drag-over');acceptFiles(e.dataTransfer.files);};
-  $('#upload-list').onclick=async e=>{const button=e.target.closest('[data-remove-file]');if(!button||button.disabled||!activeRecord||filesBusy||transitioning)return;const id=activeRecord.id;button.disabled=true;fileMutation++;filesBusy++;try{await api.removeFile(id,button.dataset.removeFile);if(activeRecord?.id===id){uploads=uploads.filter(file=>file.id!==button.dataset.removeFile);refreshUploadList();toast('Filen er slettet fra prosjektet.');}}catch(error){button.disabled=false;toast(error.message);}finally{filesBusy--;refreshUploadList();}};
+  $('#upload-list').onclick=async e=>{
+    const use=e.target.closest('[data-use-plan]');if(use){const file=uploads.find(f=>f.id===use.dataset.usePlan);if(file&&!filesBusy&&!transitioning)openPlanImport(file);return;}
+    const button=e.target.closest('[data-remove-file]');if(!button||button.disabled||!activeRecord||filesBusy||transitioning)return;const id=activeRecord.id;button.disabled=true;fileMutation++;filesBusy++;try{await api.removeFile(id,button.dataset.removeFile);if(activeRecord?.id===id){uploads=uploads.filter(file=>file.id!==button.dataset.removeFile);refreshUploadList();toast('Filen er slettet fra prosjektet.');}}catch(error){button.disabled=false;toast(error.message);}finally{filesBusy--;refreshUploadList();}
+  };
 }
 async function acceptFiles(files){
   if(transitioning){toast('Vent til prosjektet er åpnet.');return;}
@@ -147,7 +288,7 @@ async function acceptFiles(files){
 $('#file-input').onchange=e=>{acceptFiles(e.target.files);e.target.value='';};
 function openGround(){
   if(!activeRecord){openProjects();return;}
-  openDialog('La oss bli kjent med hjemmet ditt','Prosjektdetaljer og filer følger kontoen din.',`<div class="form-grid"><label class="field">Prosjektnavn<input id="project-name-field" class="input" maxlength="70" value="${esc(project.name)}"></label><label class="field">Kommune<input id="municipality-field" class="input" maxlength="70" value="${esc(project.municipality)}" placeholder="Skriv kommunen din"></label></div><div id="dropzone" class="dropzone" role="button" tabindex="0">${icon('upload')}<strong>Dra inn plantegning eller bilder</strong><span>eller <u>velg filer fra enheten</u></span><small>JPG, PNG, WebP eller PDF · Maks. 20 MB per fil · 12 filer per prosjekt</small></div><div id="file-upload-progress" class="file-upload-progress" role="status"></div><div id="upload-list" class="upload-list">${uploadList()}</div><div class="info-banner">${icon('info')}<p>Filene lagres privat på kontoen din og kan åpnes på andre enheter. AI-tolkning av opplastede tegninger er ikke tilkoblet ennå. Tegningen i studioet er foreløpig en redigerbar eksempelplan.</p></div>`,`<button class="button secondary" id="ground-cancel">Tilbake til studio</button><button class="button primary" id="ground-next">Videre til dine ønsker ${icon('arrow-right')}</button>`);
+  openDialog('La oss bli kjent med hjemmet ditt','Prosjektdetaljer og filer følger kontoen din.',`<div class="form-grid"><label class="field">Prosjektnavn<input id="project-name-field" class="input" maxlength="70" value="${esc(project.name)}"></label><label class="field">Kommune<input id="municipality-field" class="input" maxlength="70" value="${esc(project.municipality)}" placeholder="Skriv kommunen din"></label></div><div id="dropzone" class="dropzone" role="button" tabindex="0">${icon('upload')}<strong>Dra inn plantegning eller bilder</strong><span>eller <u>velg filer fra enheten</u></span><small>JPG, PNG, WebP eller PDF · Maks. 20 MB per fil · 12 filer per prosjekt</small></div><div id="file-upload-progress" class="file-upload-progress" role="status"></div><div id="upload-list" class="upload-list">${uploadList()}</div><div class="info-banner">${icon('info')}<p>Filene lagres privat på kontoen din og kan åpnes på andre enheter. Velg «Bruk i tegningen» på en fil for å sette målestokk og tegne egne rom. Automatisk AI-tolkning er ikke tilkoblet.</p></div>`,`<button class="button secondary" id="ground-cancel">Tilbake til studio</button><button class="button primary" id="ground-next">Videre til dine ønsker ${icon('arrow-right')}</button>`);
   bindUploads();refreshUploadList();
   const currentId=activeRecord.id;const currentFileMutation=fileMutation;
   api.files(currentId).then(result=>{if(activeRecord?.id===currentId&&!filesBusy&&fileMutation===currentFileMutation){uploads=result.files||[];refreshUploadList();}}).catch(error=>toast(error.message));
@@ -157,7 +298,7 @@ function openGround(){
   $('#ground-next').onclick=async()=>{if(filesBusy){toast('Vent til opplastingen er ferdig.');return;}try{await sync.flush();workflow(2);}catch(error){showSaveProblem(error);}};
 }
 function miniPlan(variant){return `<svg class="mini-plan" viewBox="0 0 240 140" fill="none" aria-hidden="true"><rect x="30" y="17" width="180" height="108" fill="#ece5d8" stroke="#5e6260" stroke-width="3"/><path d="M143 17v108M143 70h67" stroke="#5e6260" stroke-width="3"/><path d="M144 18h65v51h-65z" fill="#dce3d9"/><path d="M144 72h65v52h-65z" fill="#dce3d9"/><path d="M31 94h112v30H31z" fill="#e7e8e1"/>${variant==='03'?'<path d="M87 18v76" stroke="#5e6260" stroke-width="3"/><path d="M88 19h53v74H88z" fill="#dce3d9"/>':''}<path d="M31 94h112" stroke="#5e6260" stroke-width="2"/><rect x="40" y="32" width="15" height="43" rx="3" fill="#d1c2aa"/><rect x="58" y="43" width="34" height="22" rx="8" stroke="#a69983"/><rect x="155" y="27" width="30" height="31" rx="2" fill="#f6f4ee" stroke="#b6bcb0"/><rect x="155" y="81" width="30" height="31" rx="2" fill="#f6f4ee" stroke="#b6bcb0"/><path d="M54 17h33m83 0h20M210 40v17" stroke="#9eb8be" stroke-width="4"/></svg>`;}
-function openSuggestions(){const variants=[{id:'01',name:'Plass til hverdagen',tag:'ANBEFALT',text:'Åpen stue og to gode soverom. En balansert løsning med rom for samvær.',beds:2},{id:'02',name:'Mer plass til ro',tag:'ALTERNATIV',text:'Et større hovedsoverom og et kompakt ekstrarom til gjester eller hjemmekontor.',beds:2},{id:'03',name:'Et rom til',tag:'FAMILIE',text:'Tre soverom og en mer kompakt sosial sone. Krever nærmere faglig vurdering.',beds:3}];openDialog('Hvordan vil du bo?','Fortell om behovene dine, og utforsk mulighetene.',`<div class="needs-grid"><div class="need-control"><span>${icon('bed')} Soverom</span><div class="counter"><button data-count="bedrooms" data-delta="-1" aria-label="Færre soverom">−</button><strong id="desired-bedrooms">${project.bedrooms}</strong><button data-count="bedrooms" data-delta="1" aria-label="Flere soverom">+</button></div></div><div class="need-control"><span>${icon('bath')} Bad</span><div class="counter"><button data-count="bathrooms" data-delta="-1" aria-label="Færre bad">−</button><strong id="desired-bathrooms">${project.bathrooms}</strong><button data-count="bathrooms" data-delta="1" aria-label="Flere bad">+</button></div></div></div><label class="field">Hva er viktig for deg?<textarea id="wishes-field" class="input" rows="3" placeholder="For eksempel et ekstra soverom, mer lys eller et større bad …">${esc(project.wishes)}</textarea></label><div class="suggestion-section-heading"><h3>Tre måter å se hjemmet på</h3><span class="status-pill">Eksempelforslag</span></div><div class="suggestion-grid">${variants.map(v=>`<button class="suggestion-card ${project.variant===v.id?'selected':''}" data-variant="${v.id}"><span class="recommend-badge">${v.tag}</span>${miniPlan(v.id)}<div class="suggestion-info"><h3>${v.name}</h3><span>${v.beds} soverom · 1 bad</span><p>${v.text}</p><strong>${project.variant===v.id?'Valgt planløsning':'Utforsk denne løsningen'} ${icon(project.variant===v.id?'check':'arrow-right')}</strong></div></button>`).join('')}</div><div class="info-banner">${icon('info')}<p>Dette er redigerbare eksempelplaner, ikke AI-analyse av opplastede filer. Ønskene lagres i prosjektbriefen. Nye bad og konstruktive endringer må prosjekteres faglig.</p></div>`,`<button class="button secondary" id="suggest-back">${icon('arrow-right')} Grunnlag</button><button class="button primary" id="use-suggestion">Åpne i designstudio ${icon('arrow-right')}</button>`,true);
+function openExampleSuggestions(){const variants=[{id:'01',name:'Plass til hverdagen',tag:'ANBEFALT',text:'Åpen stue og to gode soverom. En balansert løsning med rom for samvær.',beds:2},{id:'02',name:'Mer plass til ro',tag:'ALTERNATIV',text:'Et større hovedsoverom og et kompakt ekstrarom til gjester eller hjemmekontor.',beds:2},{id:'03',name:'Et rom til',tag:'FAMILIE',text:'Tre soverom og en mer kompakt sosial sone. Krever nærmere faglig vurdering.',beds:3}];openDialog('Hvordan vil du bo?','Fortell om behovene dine, og utforsk mulighetene.',`<div class="needs-grid"><div class="need-control"><span>${icon('bed')} Soverom</span><div class="counter"><button data-count="bedrooms" data-delta="-1" aria-label="Færre soverom">−</button><strong id="desired-bedrooms">${project.bedrooms}</strong><button data-count="bedrooms" data-delta="1" aria-label="Flere soverom">+</button></div></div><div class="need-control"><span>${icon('bath')} Bad</span><div class="counter"><button data-count="bathrooms" data-delta="-1" aria-label="Færre bad">−</button><strong id="desired-bathrooms">${project.bathrooms}</strong><button data-count="bathrooms" data-delta="1" aria-label="Flere bad">+</button></div></div></div><label class="field">Hva er viktig for deg?<textarea id="wishes-field" class="input" rows="3" placeholder="For eksempel et ekstra soverom, mer lys eller et større bad …">${esc(project.wishes)}</textarea></label><div class="suggestion-section-heading"><h3>Tre måter å se hjemmet på</h3><span class="status-pill">Eksempelforslag</span></div><div class="suggestion-grid">${variants.map(v=>`<button class="suggestion-card ${project.variant===v.id?'selected':''}" data-variant="${v.id}"><span class="recommend-badge">${v.tag}</span>${miniPlan(v.id)}<div class="suggestion-info"><h3>${v.name}</h3><span>${v.beds} soverom · 1 bad</span><p>${v.text}</p><strong>${project.variant===v.id?'Valgt planløsning':'Utforsk denne løsningen'} ${icon(project.variant===v.id?'check':'arrow-right')}</strong></div></button>`).join('')}</div><div class="info-banner">${icon('info')}<p>Dette er redigerbare eksempelplaner, ikke AI-analyse av opplastede filer. Ønskene lagres i prosjektbriefen. Nye bad og konstruktive endringer må prosjekteres faglig.</p></div>`,`<button class="button secondary" id="suggest-back">${icon('arrow-right')} Grunnlag</button><button class="button primary" id="use-suggestion">Åpne i designstudio ${icon('arrow-right')}</button>`,true);
 $('#wishes-field').maxLength=4000;$('#wishes-field').oninput=e=>{project.wishes=e.target.value;persist();};
 document.querySelectorAll('[data-count]').forEach(b=>b.onclick=()=>{const key=b.dataset.count;project[key]=Math.max(1,Math.min(key==='bedrooms'?5:3,project[key]+Number(b.dataset.delta)));$('#desired-'+key).textContent=project[key];persist();});
 let choice=project.variant;document.querySelectorAll('[data-variant]').forEach(b=>b.onclick=()=>{choice=b.dataset.variant;document.querySelectorAll('[data-variant]').forEach(c=>{c.classList.toggle('selected',c===b);c.querySelector('.suggestion-info strong').innerHTML=(c===b?'Valgt planløsning':'Utforsk denne løsningen')+icon(c===b?'check':'arrow-right');});});
@@ -189,8 +330,8 @@ function openImportProject(data){
   $('#import-project-cancel').onclick=closeDialog;
   $('#import-project-submit').onclick=async e=>{const button=e.currentTarget;const name=$('#import-project-name').value.trim();if(!name){$('#import-project-name').focus();return;}button.disabled=true;try{await createCloudProject({...data.project,name},data.plan);toast('Prosjektfilen er importert og lagret på kontoen.');}catch(error){button.disabled=false;if($('#import-project-error')){$('#import-project-error').hidden=false;$('#import-project-error').textContent=error.message;}}};
 }
-function openAddRoom(){openDialog('Gi plass til et nytt rom','Legg til et rom i skissen. Plassering og tilkomst må vurderes.',`<label class="field">Romnavn<input class="input" id="new-room-name" value="Nytt soverom" maxlength="40"></label><div class="info-banner">${icon('info')}<p>Det nye rommet opprettes som en skissesone. Juster størrelse og kontroller at det passer i planløsningen.</p></div>`,`<button class="button secondary" id="cancel-room">Avbryt</button><button class="button primary" id="confirm-room">${icon('plus')} Legg til rom</button>`);$('#cancel-room').onclick=closeDialog;$('#confirm-room').onclick=()=>{const name=$('#new-room-name').value.trim()||'Nytt rom';editor.addItem('room');const last=rooms().at(-1);if(last){editor.updateRoom(last.id,{name});editor.selectRoom(last.id);}closeDialog();toast('Rommet er lagt til som en skissesone.');};}
-function openHelp(){openDialog('Fra første tanke til ny plan','Slik utforsker du hjemmets muligheter i Romly.',`<div class="help-steps">${[['1','Start med grunnlaget','Legg til bilder og plantegninger, og gi prosjektet et navn. Bilder og plantegninger lagres privat på kontoen.'],['2','Utforsk planforslag','Beskriv behovene dine og velg en av tre redigerbare eksempelplaner.'],['3','Gjør planen til din','Velg rom, endre mål og materialer, og plasser dører, vinduer og møbler. Dra i rommets hjørne for å endre størrelse.'],['4','Forbered neste steg','Bruk sjekklisten og eksporter en prosjektbrief til dialog med fagfolk.']].map(([n,t,p])=>`<article class="help-step"><span class="step-number">${n}</span><div><h3>${t}</h3><p>${p}</p></div></article>`).join('')}</div><div class="notice">${icon('info')}<p>Prosjekter og opplastede filer lagres på kontoen når du er innlogget. AI-analyse, en målfast byggmodell og kommunale oppslag er ikke tilkoblet ennå. Eksempelvisningen lagres ikke automatisk.</p></div>`);}
+function openAddRoomDialog(){openDialog('Gi plass til et nytt rom','Legg til et rom i skissen. Plassering og tilkomst må vurderes.',`<label class="field">Romnavn<input class="input" id="new-room-name" value="Nytt soverom" maxlength="40"></label><div class="info-banner">${icon('info')}<p>Det nye rommet opprettes som en skissesone. Juster størrelse og kontroller at det passer i planløsningen.</p></div>`,`<button class="button secondary" id="cancel-room">Avbryt</button><button class="button primary" id="confirm-room">${icon('plus')} Legg til rom</button>`);$('#cancel-room').onclick=closeDialog;$('#confirm-room').onclick=()=>{const name=$('#new-room-name').value.trim()||'Nytt rom';editor.addItem('room');const last=rooms().at(-1);if(last){editor.updateRoom(last.id,{name});editor.selectRoom(last.id);}closeDialog();toast('Rommet er lagt til som en skissesone.');};}
+function openHelp(){openDialog('Fra plantegning til egne rom','Slik bruker du din egen bolig som utgangspunkt.',`<div class="help-steps">${[['1','Importer plantegningen','Velg Importer plantegning fra Mine prosjekter eller verktøypanelet. Bruk JPG, PNG, WebP eller PDF, og velg riktig side i en flersidig PDF.'],['2','Sett målestokken','Marker to punkter med en kjent avstand, skriv inn avstanden i meter og bruk tegningen som underlag. Du kan også utforske en av eksempelplanene.'],['3','Tegn og utforsk i 3D','Dra fra hjørne til hjørne for å tegne rom oppå underlaget. Tilpass romtype, mål, materialer, dører og vinduer. Åpne 3D for å rotere, zoome og se veggene.'],['4','Forbered neste steg','Bruk sjekklisten og eksporter en prosjektbrief til dialog med fagfolk.']].map(([n,t,p])=>`<article class="help-step"><span class="step-number">${n}</span><div><h3>${t}</h3><p>${p}</p></div></article>`).join('')}</div><div class="notice">${icon('info')}<p>Prosjekter og opplastede filer lagres privat på kontoen. Importerte plantegninger tegnes opp manuelt; AI-tolkning og kommunale oppslag er ikke koblet til ennå. Eksempelvisningen lagres ikke automatisk.</p></div>`);}
 function initials(name){return String(name||'').split(/[\s@._-]+/).filter(Boolean).slice(0,2).map(s=>s[0]).join('').toUpperCase()||'R';}
 function renderSaveStatus(status){
   lastSaveStatus=status;
@@ -203,7 +344,7 @@ function renderSaveStatus(status){
   if(activeRecord&&sync.record?.id===activeRecord.id)activeRecord=sync.record;
 }
 function preferenceKey(){return session.user?'romly-last-project:'+session.user.id:null;}
-function rememberProject(id){try{if(preferenceKey()){if(id)localStorage.setItem(preferenceKey(),id);else localStorage.removeItem(preferenceKey());}}catch{}}
+function rememberProject(id){try{if(preferenceKey()){if(id){localStorage.setItem(preferenceKey(),id);localStorage.setItem('romly-last-active-id',id);}else{localStorage.removeItem(preferenceKey());localStorage.removeItem('romly-last-active-id');}}}catch{}}
 function previousProject(){try{return preferenceKey()?localStorage.getItem(preferenceKey()):null;}catch{return null;}}
 function legacyAvailable(){try{return !!stored?.project&&!!stored?.plan&&!localStorage.getItem('romly-legacy-imported:'+session.user?.id);}catch{return !!stored?.project&&!!stored?.plan;}}
 function projectSnapshot(){return{project:clone(project),plan:editor.getState()};}
@@ -235,27 +376,30 @@ async function withProjectTransition(action,{flush=true}={}){
     if(target&&!target.disabled)target.focus({preventScroll:true});
   }
 }
-async function applyCloudRecord(record,{checkRecovery=true}={}){
+async function applyCloudRecord(record,{checkRecovery=true,files}={}){
   if(record.status==='deleting'){openDeleteProject(record);return;}
-  const result=await api.files(record.id);
+  const result=files!==undefined?{files}:await api.files(record.id);
+  releaseReferenceAsset();
   loadingProject=true;
   try{
     activeRecord=record;project=clone(record.project);uploads=result.files||[];
     sync.activate(record);selectedId=record.plan.rooms[0]?.id||'living';editor.loadState(record.plan);
     setTool('select');zoom=100;editor.setZoom(100);$('#zoom-value').textContent='100 %';setView('2d');
-    renderProject();renderRooms();selectRoom(rooms().find(room=>room.id===selectedId)||rooms()[0]);rememberProject(record.id);
+    renderProject();rememberProject(record.id);
   }finally{loadingProject=false;}
   closeDialog({force:true});
+  resolveReferenceImage(record.plan);
   if(checkRecovery){const recovery=sync.recovery();if(recovery?.data)openRecovery(recovery);}
 }
 async function openCloudProject(id){
-  return withProjectTransition(async()=>{const result=await api.get(id);await applyCloudRecord(result.project);});
+  return withProjectTransition(async()=>{const result=await api.get(id);await applyCloudRecord(result.project,{files:result.files});});
 }
 async function createCloudProject(data,plan,{flush=true}={}){
   if(!session.user){openAccount();return;}
   return withProjectTransition(async()=>{
-    const result=await api.create({project:clone(data),plan:clone(plan)});
-    await applyCloudRecord(result.project,{checkRecovery:false});
+    const newPlan=clone(plan);delete newPlan.reference;
+    const result=await api.create({project:clone(data),plan:newPlan});
+    await applyCloudRecord(result.project,{checkRecovery:false,files:result.files||[]});
     return result.project;
   },{flush});
 }
@@ -303,15 +447,16 @@ function projectListMarkup(){
   if(!projectList.length)return`<div class="project-empty">${icon('home')}<h3>Gi plass til ditt første prosjekt</h3><p>Samle plantegninger, bilder og ideer på ett sted. Prosjektene lagres på kontoen din og kan åpnes på andre enheter.</p><button class="button primary" id="first-project-btn">${icon('plus')} Opprett ditt første prosjekt</button></div>`;
   return projectList.map(record=>`<article class="cloud-project-row ${record.id===activeRecord?.id?'current':''}"><button class="cloud-project-open" data-open-project="${esc(record.id)}">${miniPlan(record.project.variant)}<div>${record.status==='deleting'?'<span class="status-pill">SLETTING MÅ FULLFØRES</span>':record.id===activeRecord?.id?'<span class="status-pill">ÅPENT PROSJEKT</span>':''}<h3>${esc(record.project.name)}</h3><p>${esc(record.project.municipality||'Kommune ikke valgt')} · ${record.roomCount} rom · ${fmt(record.area)} m² · ${record.fileCount} filer</p><small>Sist endret ${esc(new Date(record.updatedAt).toLocaleString('nb-NO',{dateStyle:'short',timeStyle:'short'}))}</small></div></button><button class="cloud-project-delete" data-delete-project="${esc(record.id)}" aria-label="Slett ${esc(record.project.name)}" title="Slett prosjekt">${icon('trash')}</button></article>`).join('');
 }
-async function openProjects(){
+async function openProjects(preloaded){
   if(!session.user){openAccount();return;}
   const generation=++projectDialogGeneration;
-  openDialog('Mine prosjekter','Planer, bilder og muligheter – samlet på kontoen din.',`<div class="projects-heading"><p>Prosjektene er private for kontoen din.</p><button class="button primary" id="new-cloud-project">${icon('plus')} Nytt prosjekt</button></div><div id="cloud-projects-list" class="cloud-projects-list"><p class="cloud-loading">Henter prosjektene dine …</p></div>${legacyAvailable()?`<div class="project-migration"><div><strong>Du har et lokalt prosjekt fra prototypen</strong><p>Velg selv om tegningen og ønskene skal kopieres til kontoen. Den opprinnelige lokale kopien beholdes.</p></div><button class="button secondary" id="migrate-local-project">Flytt til kontoen ${icon('arrow-right')}</button></div>`:''}`,activeRecord?`<button class="button secondary" id="projects-return">Tilbake til studio</button><button class="button secondary" id="projects-details">${icon('edit')} Prosjektdetaljer</button>`:'',true);
+  openDialog('Mine prosjekter','Planer, bilder og muligheter – samlet på kontoen din.',`<div class="projects-heading"><p>Prosjektene er private for kontoen din.</p><button class="button secondary" id="projects-import-plan">Importer plantegning</button><button class="button primary" id="new-cloud-project">${icon('plus')} Nytt prosjekt</button></div><div id="cloud-projects-list" class="cloud-projects-list"><p class="cloud-loading">Henter prosjektene dine …</p></div>${legacyAvailable()?`<div class="project-migration"><div><strong>Du har et lokalt prosjekt fra prototypen</strong><p>Velg selv om tegningen og ønskene skal kopieres til kontoen. Den opprinnelige lokale kopien beholdes.</p></div><button class="button secondary" id="migrate-local-project">Flytt til kontoen ${icon('arrow-right')}</button></div>`:''}`,activeRecord?`<button class="button secondary" id="projects-return">Tilbake til studio</button><button class="button secondary" id="projects-details">${icon('edit')} Prosjektdetaljer</button>`:'',true);
   $('#new-cloud-project').onclick=openCreateProject;
+  $('#projects-import-plan').onclick=choosePlanFile;
   if($('#projects-return'))$('#projects-return').onclick=closeDialog;if($('#projects-details'))$('#projects-details').onclick=openGround;
   if($('#migrate-local-project'))$('#migrate-local-project').onclick=async e=>{const button=e.currentTarget;if(!await ensureCanLeave())return;button.disabled=true;try{const data=validateProjectImport({format:'romly-v1',...stored});await createCloudProject(data.project,data.plan);try{localStorage.setItem('romly-legacy-imported:'+session.user.id,'1');}catch{}toast('Det lokale prosjektet er kopiert til kontoen.');}catch(error){button.disabled=false;toast(error.message||'Det lokale prosjektet kunne ikke importeres.');}};
   try{
-    const result=await api.list();if(generation!==projectDialogGeneration||!$('#cloud-projects-list'))return;
+    const result=Array.isArray(preloaded)?{projects:preloaded}:await api.list();if(generation!==projectDialogGeneration||!$('#cloud-projects-list'))return;
     projectList=result.projects||[];$('#cloud-projects-list').innerHTML=projectListMarkup();
     if($('#first-project-btn'))$('#first-project-btn').onclick=openCreateProject;
     $('#cloud-projects-list').onclick=async e=>{
@@ -342,21 +487,21 @@ function openDeleteProject(record){
 }
 function validateProjectImport(data){
   const value=safeProjectJSON(JSON.stringify(data));
-  if(value.format!=='romly-v1'||!Array.isArray(value.plan.rooms)||!value.plan.rooms.length||value.plan.rooms.length>30||!value.plan.rooms.every(room=>typeof room.id==='string'&&typeof room.name==='string'&&room.name.length<80&&['x','y','w','h','width','height'].every(key=>Number.isFinite(room[key])&&Math.abs(room[key])<10000)&&room.w>0&&room.h>0&&room.width>0&&room.height>0&&/^#[a-f\d]{6}$/i.test(room.color)))throw new Error('Filen er ikke et gyldig Romly-prosjekt.');
+  if(value.format!=='romly-v1'||!Array.isArray(value.plan.rooms)||(!value.plan.rooms.length&&value.plan.variant!=='custom')||value.plan.rooms.length>30||!value.plan.rooms.every(room=>typeof room.id==='string'&&typeof room.name==='string'&&room.name.length<80&&['x','y','w','h','width','height'].every(key=>Number.isFinite(room[key])&&Math.abs(room[key])<10000)&&room.w>0&&room.h>0&&room.width>0&&room.height>0&&/^#[a-f\d]{6}$/i.test(room.color)))throw new Error('Filen er ikke et gyldig Romly-prosjekt.');
   return value;
 }
 async function initializeCloud(){
   renderSaveStatus({state:'loading',message:'Kobler til kontoen …'});
   try{
-    session=await api.session();sessionReady=true;sync.user=session.user;
+    let preferredId;try{preferredId=localStorage.getItem('romly-last-active-id');}catch{}
+    const bootstrap=await api.bootstrap(preferredId);session=bootstrap;sessionReady=true;sync.user=session.user;
     $('#profile-btn').textContent=session.user?initials(session.user.name||session.user.email):'Logg inn';
     $('#profile-btn').classList.toggle('signed-out',!session.user);
     $('#profile-btn').setAttribute('aria-label',session.user?'Åpne kontoen til '+(session.user.name||session.user.email):'Logg inn');
     $('#profile-btn').title=session.user?.name||'Logg inn';
     if(!session.user){sync.activate(null);openAccount();return;}
-    const result=await api.list();projectList=result.projects||[];const lastId=previousProject();const choice=projectList.find(record=>record.id===lastId&&record.status!=='deleting')||projectList.find(record=>record.status!=='deleting');
-    if(choice){await openCloudProject(choice.id);}
-    else{sync.activate(null);openProjects();}
+    if(bootstrap.project){await withProjectTransition(()=>applyCloudRecord(bootstrap.project,{files:bootstrap.files||[]}));}
+    else{sync.activate(null);openProjects(bootstrap.hasProjects?undefined:[]);}
   }catch(error){sessionReady=false;renderSaveStatus({state:'error',message:'Kontotjenesten er utilgjengelig',error});toast(error.message);openAccount();}
 }
 function openInspiration(){openDialog('Et hjem som føles som deg','Tre retninger å utforske i din egen plan.',`<div class="inspiration-grid">${[{name:'Lunt og naturlig',text:'Lys eik, varme tekstiler og rolige grønntoner.',color:'#e9dfcc',cls:'natural'},{name:'Varm minimalisme',text:'Gyldent treverk, myke former og færre elementer.',color:'#d7bc98',cls:'warm-minimal'},{name:'Lyst og tidløst',text:'Lyse flater, dempede gråtoner og rene linjer.',color:'#e3e4df',cls:'timeless'}].map(x=>`<button class="inspiration-card" data-inspo="${x.color}"><span class="inspiration-visual ${x.cls}"><i></i><i></i><i></i></span><h3>${x.name}</h3><p>${x.text}</p><strong>Prøv i valgt rom ${icon('arrow-right')}</strong></button>`).join('')}</div>`, '',true);document.querySelectorAll('[data-inspo]').forEach(b=>b.onclick=()=>{editor.updateRoom(selectedId,{color:b.dataset.inspo});closeDialog();toast('Materialet er lagt til i det valgte rommet.');});}
@@ -364,7 +509,7 @@ function openShortcuts(){openDialog('Litt raskere fra tanke til tegning','Hurtig
 $('#help-btn').onclick=openHelp;$('#projects-nav').onclick=$('#breadcrumb-home').onclick=openProjects;$('#profile-btn').onclick=openAccount;$('#inspiration-nav').onclick=openInspiration;$('#export-btn').onclick=openExport;$('#check-btn').onclick=$('#summary-check').onclick=()=>workflow(4);$('#new-suggestion').onclick=()=>workflow(2);$('#shortcuts-btn').onclick=openShortcuts;
 $('#floor-info').onclick=()=>toast('Eksempelprosjektet inneholder én etasje. Alle rom vises i denne planen.');
 $('#insight-btn').onclick=()=>{openDialog('Mer plass til å være sammen','Et åpent rom trenger også gode soner.',`<div class="help-steps"><article class="help-step"><span class="room-icon">${icon('sofa')}</span><div><h3>La møblene skape soner</h3><p>Bruk sofa, spisebord og belysning til å definere ulike områder uten å lukke rommet.</p></div></article><article class="help-step"><span class="room-icon">${icon('wall')}</span><div><h3>Avklar veggen før du åpner opp</h3><p>En tegning eller et bilde kan ikke fastslå om veggen er bærende. Få konstruksjonen vurdert av fagfolk før riving.</p><a class="text-link" href="https://www.dibk.no/bygge-eller-endre/arbeid-pa-eksisterende-bygg/innvendig-ombygging" target="_blank" rel="noopener noreferrer">Les DiBKs veiledning ↗</a></div></article></div>`);};
-document.addEventListener('keydown',e=>{if(transitioning||/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)||dialog.open)return;const key=e.key.toLowerCase();if((e.ctrlKey||e.metaKey)&&key==='z'){e.preventDefault();e.shiftKey?editor.redo():editor.undo();return;}if(e.ctrlKey||e.metaKey)return;const shortcuts={v:'select',w:'wall',d:'door',f:'window'};if(shortcuts[key]){e.preventDefault();setTool(shortcuts[key]);}if(key==='escape')setTool('select');if(key==='delete'||key==='backspace'){e.preventDefault();editor.removeSelected();}});
+document.addEventListener('keydown',e=>{if(transitioning||/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)||dialog.open)return;const key=e.key.toLowerCase();if((e.ctrlKey||e.metaKey)&&key==='z'){e.preventDefault();e.shiftKey?editor.redo():editor.undo();return;}if(e.ctrlKey||e.metaKey)return;const shortcuts={r:'room',v:'select',w:'wall',d:'door',f:'window'};if(shortcuts[key]){e.preventDefault();setTool(shortcuts[key]);}if(key==='escape')setTool('select');if(key==='delete'||key==='backspace'){e.preventDefault();editor.removeSelected();}});
 window.addEventListener('beforeunload',event=>{if(sync.dirty||sync.saving||filesBusy||transitioning){event.preventDefault();event.returnValue='';}});
 $('#save-status').onclick=()=>{if(sync.error)showSaveProblem();};
 $('#save-status').onkeydown=e=>{if((e.key==='Enter'||e.key===' ')&&sync.error){e.preventDefault();showSaveProblem();}};
