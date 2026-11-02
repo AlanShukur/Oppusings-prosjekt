@@ -9,10 +9,16 @@ Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it sho
   - landing and legal pages;
   - crash reports;
   - staging and production deploys.
-- **Staging:** https://romly-staging.romly.workers.dev. It deploys automatically on every merge to `main`. Last checked 2026-11-02: smoke test 13/13 on `main` at `44e77da`.
+- **Staging:** https://romly-staging.romly.workers.dev. It deploys automatically on every merge to `main`. Last checked 2026-11-02: smoke test 13/13 on `main` at `2d19c08` (after PR #5).
 - **Production:** https://romly.romly.workers.dev has not been deployed yet.
-- **Next:** Sprint 2 in `docs/SPRINTPLAN.md` (plan model v2: wall entities with demolish and load-bearing status, a "today's layout" baseline, splitting `app.js`).
-- **Tests:** 125 unit tests (`npm test`) and the browser smoke test (`romly-browser-qa`).
+- **Sprint 2 in progress** (`docs/SPRINTPLAN.md`) on branch `sprint-2-plan-model`.
+  - Step 1 is done and in an open PR: the plan format version and migrations (`PLAN_VERSION = 1`).
+  - Next steps:
+    1. Walls as their own elements, with existing/new/demolish status and a load-bearing flag.
+    2. A "today's layout" baseline.
+    3. Check rules that use them.
+    4. Splitting `app.js`.
+- **Tests:** 133 unit tests (`npm test`) and the browser smoke test (`romly-browser-qa`).
 
 ## Decisions
 
@@ -20,9 +26,12 @@ Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it sho
 - **Plain `<a>` links on the public pages.** vinext 1.0.0-beta.5's `<Link>` breaks navigation in production builds.
 - **Deploys:** staging deploys on merge; production deploys only when the user starts it. Never use "Re-run" on an old Deploy run; a guard step blocks it.
 - **TEK17:** the check is indicative only. Ruleset `2026-11-01`, verified 01.11.2026. The tiltakshaver is responsible.
+- **Plan format (2026-11-02):** saved plans carry `schemaVersion`, and older ones are migrated on load. A plan from a newer Romly is refused with "Last inn siden på nytt", never opened and overwritten. The server keeps the version and refuses newer ones too.
 - **Language:** UI text is Norwegian bokmål; docs for the team are in English, except `README.md` and `docs/LEGAL-REVIEW.md`.
 
 ## Waiting on the user
+
+- **Merge the Sprint 2, step 1 PR** (branch `sprint-2-plan-model`). After merging, verify the staging deploy and run the smoke test.
 
 - **Production deploy:** run *Actions → Deploy → Run workflow → production* as a new run. Optionally add a required reviewer on the `production` environment.
 - **Legal:** fill in `lib/company.ts` and get the legal review (`docs/LEGAL-REVIEW.md`). The legal pages show a draft notice until `legalReviewed` is true.
@@ -30,9 +39,19 @@ Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it sho
 - **Old OpenAI Sites copy:** decide whether to keep or retire it.
 - **Stale branches:** optionally delete `sprint-0-editor-tek17`, `sprint-1-local-first`, `docs-deploy-subdomain`, `fix-landing-links` and `deploy-guard`.
 - **Open request:** fixing what /usage flagged and moving search agents to a cheaper model needs the /usage output first. Show each change before making it.
-- **Merge the open PR:** branch `claude-skills-memory` holds the skills, `CLAUDE.md`, this file, the Stop hook and the ESLint ignores. After merging, open `/hooks` once or restart Claude Code so the hook loads.
+- **Stale branches (continued):** `claude-skills-memory` can be deleted too.
 
 ## Task log (newest first)
+
+- **2026-11-02:** Sprint 2, step 1, on branch `sprint-2-plan-model`. Committed and PR opened.
+  - **Plan format version:** `PLAN_VERSION`, `migratePlan` and `MIGRATIONS` in `plan.js`; the old example-openings upgrade became migration 0→1. The editor stamps the version and migrates on load. Opening, startup, recovery and import all refuse plans from a newer Romly. The server keeps the version and refuses newer ones.
+  - **Fix:** deleting every door and window from an example plan no longer brings them back on reload.
+  - **Fix:** toasts now show above open dialogs (manual popover).
+  - **Tests:** 7 new unit tests (`tests/plan-version.test.mjs`); 133 of 133 pass. Browser checks: version 9/9, toast placement on desktop and phone, smoke test 13/13.
+  - **Skills:** the `romly-browser-qa` example import needed a `file:///` URL on Windows; `romly-studio` now covers plan versions and toasts.
+- **2026-11-02:** Confirmed the Stop hook is active. It loads from the parent folder's `.claude/settings.local.json`, because Claude Code starts in `Oppusings-prosjekt`.
+
+- **2026-11-02:** PR #5 merged (skills, memory, Stop hook). Deploy run 41480814783 succeeded, staging smoke test 13/13, local `main` at `2d19c08`. These memory edits are uncommitted on `main`; include them in the next branch.
 
 - **2026-11-02:** Added the Claude Code skills (`romly-run`, `romly-browser-qa` with `smoke.mjs`, `romly-studio`, `romly-tek17`, `romly-ship` with `gh-runs.mjs`, `romly-skill-keeper`). Also added `docs/SKILLS.md`, this file, `CLAUDE.md`, a Stop hook that asks for a memory update, and ESLint ignores for the generated `public/studio/vendor/` and local `.qa/` folders. Smoke test against staging: 13/13. Committed on branch `claude-skills-memory` and opened a PR.
 - **2026-11-02:** PR #4 merged: deploy guard against re-running old commits. Staging verified, 16/16.

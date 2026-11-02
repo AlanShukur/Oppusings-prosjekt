@@ -1,4 +1,4 @@
-import { PlanEditor, upgradeExamplePlan } from './plan.js';
+import { PlanEditor, migratePlan } from './plan.js';
 import { ProjectSync, isRevisionConflict } from './cloud.js';
 import { createLocalApi, LOCAL_USER } from './local-store.js';
 import { openFloorplanFile, calibrateReference } from './reference-loader.js';
@@ -87,7 +87,8 @@ let project={name:'Eksempelbolig',municipality:'',bedrooms:2,bathrooms:1,wishes:
 let stored;
 try{stored=JSON.parse(localStorage.getItem('romly-project-v1'));}catch{}
 const storageAvailable=(()=>{try{localStorage.setItem('romly-test','1');localStorage.removeItem('romly-test');return true;}catch{return false;}})();
-function toast(message){$('#toast').textContent=message;$('#toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('visible'),3800);}
+// Re-showing the popover puts the toast in the top layer above any open dialog and its backdrop.
+function toast(message){const el=$('#toast');el.textContent=message;try{if(el.matches(':popover-open'))el.hidePopover();el.showPopover();}catch{}el.classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('visible'),3800);}
 function persist(plan){if(!loadingProject&&editor){const snapshot=plan||editor.getState();sync.mark({project:clone(project),plan:snapshot});resolveReferenceImage(snapshot);updateWorkflowProgress();}}
 function roomIcon(r){return r?.type==='bedroom'?'bed':r?.type==='bath'?'bath':r?.type==='hall'?'hall':r?.type==='office'?'table':r?.type==='storage'?'layers':'sofa';}
 function rooms(){return editor?.getState().rooms||[];}
@@ -480,12 +481,13 @@ async function withProjectTransition(action,{flush=true}={}){
 }
 async function applyCloudRecord(record,{checkRecovery=true,files}={}){
   if(record.status==='deleting'){openDeleteProject(record);return;}
+  const plan=migratePlan(record.plan);// throws for a plan from a newer Romly before anything is switched
   const result=files!==undefined?{files}:await api.files(record.id);
   releaseReferenceAsset();
   loadingProject=true;
   try{
     activeRecord=record;project=clone(record.project);uploads=result.files||[];
-    sync.activate(record);selectedId=record.plan.rooms[0]?.id||'living';editor.loadState(upgradeExamplePlan(record.plan));
+    sync.activate(record);selectedId=plan.rooms[0]?.id||'living';editor.loadState(plan);
     setTool('select');zoom=100;editor.setZoom(100);$('#zoom-value').textContent='100 %';setView('2d');
     renderProject();rememberProject(record.id);
   }finally{loadingProject=false;}
@@ -512,7 +514,7 @@ function openRecovery(recovery){
     const data=validateProjectImport({format:'romly-v1',...recovery.data});
     if(recovery.revision!==sync.record.revision){const oldRecoveryKey=sync.recoveryKey;await createCloudProject({...data.project,name:(data.project.name+' – gjenopprettet').slice(0,70)},data.plan,{flush:false});removeRecoveryKey(oldRecoveryKey);toast('Gjenopprettingskopien er lagret som et nytt prosjekt.');return;}
     await withProjectTransition(async()=>{
-      loadingProject=true;try{project=clone(data.project);editor.loadState(upgradeExamplePlan(data.plan));renderProject();}finally{loadingProject=false;}
+      loadingProject=true;try{project=clone(data.project);editor.loadState(data.plan);renderProject();}finally{loadingProject=false;}
       persist();await sync.flush();closeDialog({force:true});
     },{flush:false});
     toast('Endringene er hentet tilbake og lagret.');
@@ -612,6 +614,7 @@ function openDeleteProject(record){
 function validateProjectImport(data){
   const value=safeProjectJSON(JSON.stringify(data));
   if(value.format!=='romly-v1'||!Array.isArray(value.plan.rooms)||(!value.plan.rooms.length&&value.plan.variant!=='custom')||value.plan.rooms.length>30||!value.plan.rooms.every(room=>typeof room.id==='string'&&typeof room.name==='string'&&room.name.length<80&&['x','y','w','h','width','height'].every(key=>Number.isFinite(room[key])&&Math.abs(room[key])<10000)&&room.w>0&&room.h>0&&room.width>0&&room.height>0&&/^#[a-f\d]{6}$/i.test(room.color)))throw new Error('Filen er ikke et gyldig Romly-prosjekt.');
+  value.plan=migratePlan(value.plan);
   return value;
 }
 // No sign-in for now: projects and files live in this browser (local-store.js). The cloud api
@@ -621,7 +624,7 @@ async function initializeStorage(){
   try{
     let preferredId;try{preferredId=localStorage.getItem('romly-last-active-id');}catch{}
     const bootstrap=await api.bootstrap(preferredId);sessionReady=true;sync.user=session.user;
-    if(bootstrap.project){await withProjectTransition(()=>applyCloudRecord(bootstrap.project,{files:bootstrap.files||[]}));}
+    if(bootstrap.project){try{await withProjectTransition(()=>applyCloudRecord(bootstrap.project,{files:bootstrap.files||[]}));}catch(error){if(error.code!=='plan_too_new')throw error;sync.activate(null);openProjects();toast(error.message);}}
     else{sync.activate(null);openProjects(bootstrap.hasProjects?undefined:[]);}
   }catch(error){reportProblem(error,{context:'storage-init'});sessionReady=false;sync.activate(null);renderSaveStatus({state:'error',message:'Nettleseren tillater ikke lagring',error});openStorage();}
 }

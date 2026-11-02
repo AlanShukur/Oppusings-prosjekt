@@ -33,12 +33,17 @@ Romly is a Norwegian renovation planner. The **studio** (`public/studio/`) is a 
   - Doors and windows may also have `width`, `height`, `sillHeight`, `entrance` and `escape`.
   - The default width is 42 units for a door and 70 for a window. An opening attaches to a wall within 24 units.
 - **Project facts:** `project.building` and `project.measures` feed the TEK17 check.
+- **Format version:** saved plans carry `schemaVersion` (`PLAN_VERSION` in `plan.js`; a missing version means 0, from before versioning).
+  - `getState()` stamps the version.
+  - `loadState()` and `migratePlan()` upgrade older plans through `MIGRATIONS`.
+  - A plan from a newer Romly throws `code: 'plan_too_new'` before anything changes, so it is never opened and overwritten.
 
 ## Things that must change together
 
 - **A new room type:** `ROOM_TYPES` in `plan.js` and `ROOM_TYPES` in `lib/projects-api.mjs`, the `#room-type` `<option>` in `index.html`, and the `STAY` map in `tek17-check.js`.
 - **A new room, opening, building or measure field:** add it to the allowlist in `lib/projects-api.mjs` (`ROOM_FIELDS`, `OPENING_FIELDS`, `BUILDING_FIELDS` or `MEASURE_FIELDS`), with a range check and a test in `tests/projects-api.test.mjs`. `validateProjectPayload` silently **drops** unknown fields, so a missing entry loses data once server storage returns.
 - **A new studio JS file:** add `node --check public/studio/<file>.js` to the `check` script in `package.json`.
+- **A change to what a saved plan looks like:** bump `PLAN_VERSION` in `plan.js` and in `lib/projects-api.mjs` (a test keeps them equal). Add a `MIGRATIONS` entry that turns the previous version into the new one, and test it in `tests/plan-version.test.mjs`. Teach `PlanEditor.loadState` and the server validator to keep the new fields.
 - **A change to the project or backup format:** update `validateProjectImport` in `app.js` (JSON import and restore) and `exportAll` in `local-store.js`.
 - **A change to storage behaviour:** change `local-store.js` and the server API together, or record why they differ. Their tests are `tests/local-store.test.mjs` and `tests/projects-api.test.mjs`.
 
@@ -52,6 +57,7 @@ Romly is a Norwegian renovation planner. The **studio** (`public/studio/`) is a 
   - Numbers use a decimal comma. Inputs are `type="text" inputmode="decimal"` and are parsed with `decimal()` in `app.js`.
   - Escape user text with `esc()` when building HTML strings.
 - **No sign-in.** Everything is stored on the device. The server code is kept but unused by the studio, so don't delete it: `lib/projects-api.mjs`, `app/api/`, `app/chatgpt-auth.ts`, `db/` and `drizzle/`. Avoid the word "konto" in UI text; say "på denne enheten".
+- **Messages:** use `toast(message)`. The toast is a manual popover, so it shows above open dialogs. Don't move it back to a plain fixed element.
 - **Hidden elements:** CSS `display` overrides the `hidden` attribute. Follow `.item-properties [hidden]{display:none!important}` in `studio-extra.css` when you add a hidden section.
 - **Keyboard shortcuts:** they live in the `keydown` handler near the end of `app.js`. It ignores keys while a dialog is open or focus is in a text field. Single-key actions such as Delete and the arrows also skip focused buttons and links (`onControl`). Keep both guards for new shortcuts.
 

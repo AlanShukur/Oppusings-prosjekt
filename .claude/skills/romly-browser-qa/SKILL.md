@@ -33,10 +33,10 @@ Screenshots and `results.json` go to `%TEMP%\romly-qa`. Read the PNGs to actuall
 
 ## Writing a new check
 
-Put one-off scripts in the scratchpad and import the harness by absolute path. Add a check to `smoke.mjs` only if it should guard every release.
+Put one-off scripts in the scratchpad and import the harness by absolute path. On Windows that path must be a `file:///` URL: a bare `C:/…` import fails with `ERR_UNSUPPORTED_ESM_URL_SCHEME`. Add a check to `smoke.mjs` only if it should guard every release.
 
 ```js
-import {openBrowser} from 'C:/Users/alan_/fuckshit/oppussingsApp/Oppusings-prosjekt/romly/.claude/skills/romly-browser-qa/qa-harness.mjs';
+import {openBrowser} from 'file:///C:/Users/alan_/fuckshit/oppussingsApp/Oppusings-prosjekt/romly/.claude/skills/romly-browser-qa/qa-harness.mjs';
 const b = await openBrowser({base: 'http://127.0.0.1:5174', width: 390, height: 844, mobile: true});
 try {
   await b.go('/studio/index.html');

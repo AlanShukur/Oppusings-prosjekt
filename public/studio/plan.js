@@ -74,6 +74,19 @@ export function upgradeExamplePlan(plan){
   const openings=exampleOpenings(plan.rooms||[]);
   return openings.length?{...plan,items:[...(plan.items||[]),...openings].slice(0,MAX_ITEMS)}:plan;
 }
+/** Version of the saved plan format. Bump it with a new MIGRATIONS entry whenever saved plans change shape, and keep PLAN_VERSION in lib/projects-api.mjs equal (a test checks). */
+export const PLAN_VERSION=1;
+// MIGRATIONS[n] turns a version n plan into version n+1. Version 0 is every plan saved before versioning.
+const MIGRATIONS=[upgradeExamplePlan];
+const planError=(message,code)=>Object.assign(new Error(message),{code});
+/** The plan in the current format; the input is not changed. Plans from a newer Romly are refused, because this code would drop what it does not know. */
+export function migratePlan(plan){
+  const version=plan?.schemaVersion===undefined?0:plan.schemaVersion;
+  if(!Number.isInteger(version)||version<0)throw planError('Plantegningen har en ugyldig formatversjon.','invalid_plan');
+  if(version>PLAN_VERSION)throw planError('Prosjektet er lagret med en nyere versjon av Romly. Last inn siden på nytt for å åpne det.','plan_too_new');
+  let next=clone(plan);for(let v=version;v<PLAN_VERSION;v++)next=MIGRATIONS[v](next);
+  return {...next,schemaVersion:PLAN_VERSION};
+}
 
 function rect(x,y,w,h,fill='#fff',rx=2,stroke='#a5a39a',sw=1.2){return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>`;}
 function plant(x,y,r=13){return `<g transform="translate(${x} ${y})"><circle r="${r}" fill="#d9ddcd" stroke="#a7b49d"/><path d="M0 7C-18-1-11-15 0-3C8-23 19-8 3 1C22-2 13 16 2 6C-8 21-18 9-2 2" fill="#9eaf92" stroke="#859b7b" stroke-width=".7"/></g>`;}
@@ -108,7 +121,7 @@ export class PlanEditor {
     this.container.addEventListener('wheel',event=>this.wheel(event),{passive:false});
   }
 
-  getState(){return clone(this.state);}
+  getState(){return {...clone(this.state),schemaVersion:PLAN_VERSION};}
   room(){return this.state.rooms.find(room=>room.id===this.selected);}
   isCustom(){return this.state.variant==='custom'||!!this.state.reference;}
   isExample(){return !this.state.reference&&this.state.variant!=='custom'&&EXAMPLE_ROOM_IDS.every(id=>this.state.rooms.some(room=>room.id===id));}
@@ -117,6 +130,7 @@ export class PlanEditor {
   notify(){this.onChange(this.getState());const room=this.room();this.onSelect(room?clone(room):null);}
   loadState(state){
     if(!state||!Array.isArray(state.rooms))throw new Error('Plantegningen kunne ikke leses.');
+    state=migratePlan(state);
     this.state={rooms:clone(state.rooms),items:clone(state.items||[]),variant:state.variant||'balanced'};
     if(state.reference)this.state.reference=clone(state.reference);
     this.history=[];this.future=[];this.drag=null;this.selectedItem=null;this.wallStart=null;this.wallEnd=null;this.roomStart=null;this.roomEnd=null;
