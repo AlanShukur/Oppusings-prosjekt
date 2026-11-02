@@ -426,3 +426,45 @@ test('database failures return a generic service error without revealing SQL or 
     assert.ok(!body.includes('SELECT'));
   } finally { env.DB = real; }
 });
+
+test('optional TEK17 facts, opening sizes and Bod rooms round-trip; unanswered facts stay absent', async () => {
+  const payload = draft();
+  payload.project.building = { ceilingHeight: 2.4, permitBefore2011: true, accessibleUnit: null, lightTransmission: 0.6, unknownKey: 'dropped' };
+  payload.project.measures = { bearingWall: 'vet-ikke', facade: false };
+  payload.plan.rooms.push({ id: 'bod', name: 'Bod', type: 'storage', x: 460, y: 100, w: 100, h: 100, width: 2, height: 2, area: 4, color: '#e8e1d1', ceilingHeight: 2.2, previousUse: 'tilleggsdel' });
+  payload.plan.items.push({ id: 'w1', type: 'window', x: 200, y: 100, rotation: 0, width: 1.2, height: 1.3, sillHeight: 0.8, escape: true }, { id: 'd1', type: 'door', x: 140, y: 300, rotation: 90, width: 0.9, entrance: true }, { id: 'p1', type: 'plant', x: 200, y: 200, rotation: 0, width: 3 });
+  const created = (await json(await api('/api/projects', { method: 'POST', body: payload }), 201)).project;
+  const read = (await json(await api(`/api/projects/${created.id}`), 200)).project;
+  assert.deepEqual(read.project.building, { ceilingHeight: 2.4, permitBefore2011: true, lightTransmission: 0.6 });
+  assert.deepEqual(read.project.measures, { bearingWall: 'vet-ikke', facade: false });
+  assert.equal(read.plan.rooms[1].type, 'storage');
+  assert.equal(read.plan.rooms[1].previousUse, 'tilleggsdel');
+  assert.deepEqual(read.plan.items[0], payload.plan.items[0]);
+  assert.deepEqual(read.plan.items[1], payload.plan.items[1]);
+  assert.equal(read.plan.items[2].width, undefined, 'opening fields are not kept on furniture');
+});
+
+test('invalid optional facts are rejected instead of being stored', async () => {
+  for (const mutate of [
+    body => { body.project.building = { ceilingHeight: 12 }; },
+    body => { body.project.measures = { bearingWall: 'kanskje' }; },
+    body => { body.plan.items.push({ id: 'w', type: 'window', x: 1, y: 1, rotation: 0, sillHeight: -1 }); },
+    body => { body.plan.rooms[0].previousUse = 'kjeller'; },
+    body => { body.project.building = 'ja'; },
+  ]) {
+    const body = draft();
+    mutate(body);
+    assert.equal((await api('/api/projects', { method: 'POST', body })).status, 400);
+  }
+});
+
+test('an account cannot store more than the per-user byte quota across projects', async () => {
+  const first = await create('A');
+  const second = await create('B');
+  await env.DB.prepare(`INSERT INTO project_files (id, project_id, storage_key, filename, mime_type, size, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'ready', ?)`).bind('big', first.id, `projects/${first.id}/big`, 'stor.pdf', 'application/pdf', 1024 * 1024 * 1024 - 10, new Date().toISOString()).run();
+  const response = await upload(second.id);
+  assert.equal(response.status, 409);
+  assert.equal((await response.json()).error.code, 'storage_limit');
+  assert.equal((await json(await api(`/api/projects/${second.id}/files`), 200)).files.length, 0);
+  assert.equal((await upload(second.id, { user: other })).status, 404);
+});

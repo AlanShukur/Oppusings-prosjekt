@@ -29,6 +29,8 @@ Lokal utvikling simulerer innlogging med testbrukeren `local_seedy`. Bruk innlog
 - Private forhåndsvisninger, nedlasting og sletting av vedlegg. Sletting av prosjekt fjerner vedleggene; feil ved opprydding kan prøves igjen. Avbrutte opplastinger kan ryddes etter en 15 minutters frist.
 - Eksplisitt import av prosjektet fra prototypens `romly-project-v1`. Den gamle lokale kopien beholdes. JSON-import oppretter et eget prosjekt; JSON-eksport inkluderer tegning og ønsker, men ikke vedlegg.
 - Romredigering, materialer, møbler, dører, vinduer, skillevegger, angre/gjør om, SVG-eksport og prosjektbrief.
+- Designstudioet: panorering og zoom med rullehjul (25–400 %), flytting av egne rom med festing til naborom, rotering (Q/E), duplisering (Ctrl+D) og flytting med piltaster. Dører og vinduer følger veggen de står på. Vinduer og dører har mål (glassbredde, glasshøyde, underkant, fri bredde), og rom kan ha takhøyde, tidligere bruk og romtypen Bod.
+- Veiledende TEK17-kontroll (`public/studio/tek17-check.js`) beregnet fra tegningen og svarene i «Om boligen og tiltaket»: utsyn, dagslys, romhøyde, snuareal, bad, dørbredde, rømningsvindu, bod, ventilasjon, våtrom og søknadsplikt. Hver regel har kilde på dibk.no eller lovdata.no og kontrolldato. Mangler det opplysninger, vises det som ukjent, og kontrollen sier aldri «godkjent».
 - Ekte 3D med Three.js: romgulv, vegger med dør- og vindusåpninger, møbler, rotasjon, zoom og valg mellom åpne eller hele vegger. Egne opptegnede rom bruker samme modell som 2D-redigeringen.
 
 Oppstarten bruker ett samlet serverkall. Musebevegelser samles til én opptegning per skjermbilde, og 3D tegner bare ved endringer. PDF.js og Three.js lastes først når de trengs; ingen nettbaserte skrifter eller CDN-er er nødvendige.
@@ -40,7 +42,10 @@ Arbeidsflaten følger vinduets bredde og høyde uten siderulling. Paneler og dia
 - `public/studio/`: editor, grensesnitt og klient for prosjektlagring. Dette er kildefilene; `dist/` genereres av byggingen.
 - `scripts/build-studio-assets.mjs`: bygger den valgfrie 3D-modulen og kopierer PDF.js, worker og lokale ressurser til ignorert `public/studio/vendor/`. Kjøres automatisk ved utvikling og bygging.
 - `app/api/[...path]/route.ts`: serverruter og innlogget identitet.
-- `lib/projects-api.mjs`: validering, autorisasjon, revisjoner, D1 og R2.
+- `lib/projects-api.mjs`: validering, autorisasjon, revisjoner, D1 og R2. Inntil 1 GB filer per konto.
+- `public/studio/tek17-check.js`: regelmotoren for prosjektkontrollen. Terskler og kilder ble kontrollert 01.11.2026 og må kontrolleres på nytt når DiBK endrer veiledningen.
+- `docs/SPRINTPLAN.md`: plan fra dagens prototype til lansering.
+- `.github/workflows/ci.yml`: syntakssjekk og tester uten installasjon, deretter lint og bygging.
 - `db/schema.ts` og `drizzle/`: skjema og versjonerte migrasjoner.
 - `.openai/hosting.json`: eksisterende Site-ID og logiske `DB`/`BUCKET`-bindinger. Sites oppretter ressursene og anvender migrasjoner ved publisering.
 
@@ -54,6 +59,6 @@ Testene bruker faktisk SQLite med applikasjonens SQL-migrasjon. De dekker blant 
 
 ## Gjenstående produktarbeid
 
-Du kan starte med en egen importert plantegning eller en tydelig merket eksempelplan. AI-tolkning av egne plantegninger, automatiske forslag fra egen bolig, en teknisk bygningsmodell og automatisert regelkontroll er ikke implementert. TEK17-delen er en veiledende sjekkliste med DiBK-kilder.
+Du kan starte med en egen importert plantegning eller en tydelig merket eksempelplan. AI-tolkning av egne plantegninger, automatiske forslag fra egen bolig, en teknisk bygningsmodell og kommunale oppslag er ikke implementert. TEK17-delen er en veiledende kontroll av tegningen mot preaksepterte ytelser; den har ingen bæringsmodell, ingen «dagens planløsning» å sammenligne med og bare én etasje.
 
 Mål er skisseverdier og den romlige visningen er en illustrasjon. Bæring, brann, dagslys, våtrom og søknadsplikt må dokumenteres for det konkrete tiltaket. Appen sender ingen byggesøknad og gir ingen teknisk eller kommunal godkjenning.

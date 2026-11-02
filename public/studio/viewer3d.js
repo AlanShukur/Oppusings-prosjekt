@@ -329,9 +329,10 @@ class Plan3DViewer {
       this.box(parent, 0.032, height - 0.06, depth, x, y, 0, frame, false);
       this.box(parent, width - 0.075, height - 0.075, 0.012, x, y, 0, this.material('#aecfd1', {transparent: true, opacity: 0.3, roughness: 0.28, depthWrite: false}), false);
     } else {
-      const hinge = new Group();
-      hinge.position.set(opening.start + 0.04, 0, 0);
-      hinge.rotation.y = 0.7;
+      // Hinge side and swing follow the 2D door symbol (see doorSwing in scene-geometry.js).
+      const hinge = new Group(), swing = opening.swing ?? -1;
+      if (opening.hinge === 'end') {hinge.position.set(opening.end - 0.04, 0, 0); hinge.rotation.y = Math.PI + 0.7 * swing;}
+      else {hinge.position.set(opening.start + 0.04, 0, 0); hinge.rotation.y = -0.7 * swing;}
       const leafWidth = width - 0.075;
       this.box(hinge, leafWidth, height - 0.06, 0.035, leafWidth / 2, (height - 0.06) / 2, 0, '#dfd0b4');
       this.ellipsoid(hinge, leafWidth - 0.085, 1.03, 0.04, 0.03, 0.025, 0.025, '#b9a477', 8);

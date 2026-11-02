@@ -1,8 +1,17 @@
 /** Geometry shared by the 2D editor and the 3D viewer. Coordinates are 50 units/m. */
 export const PLAN_UNITS_PER_METER = 50;
+/** Default opening widths in plan units when an item has no explicit width (m). */
+export const DEFAULT_OPENING_WIDTH = {door: 42, window: 70};
+/** Openings farther than this from a wall are not attached to it (2D warning, 3D skip, checks). */
+export const OPENING_ATTACH_DISTANCE = 24;
 const EPS = 0.00001;
 const finite = (value, fallback = 0) => Number.isFinite(value) ? value : fallback;
 const round = value => Math.round(value * 100000) / 100000;
+// Cut parameters are deduped at high precision and only the resulting coordinates
+// are rounded, so a split at e.g. t=160/430 lands exactly on the neighbour's corner.
+const roundCut = value => Math.round(value * 1e9) / 1e9;
+const roundCoord = value => Math.round(value * 1000) / 1000;
+export const openingWidthUnits = item => Number.isFinite(item?.width) && item.width > 0 ? item.width * PLAN_UNITS_PER_METER : DEFAULT_OPENING_WIDTH[item?.type] ?? 70;
 const cross = (ax, ay, bx, by) => ax * by - ay * bx;
 const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -54,11 +63,11 @@ export function deriveWalls(state = {}) {
   }
   const unique = new Map();
   for (const segment of segments) {
-    const cuts = [...new Set(segment.cuts.map(round))].sort((a, b) => a - b);
+    const cuts = [...new Set(segment.cuts.map(roundCut))].sort((a, b) => a - b);
     for (let i = 1; i < cuts.length; i++) {
       const t = cuts[i - 1], u = cuts[i];
-      let a = {x: round(segment.x + (segment.x2 - segment.x) * t), y: round(segment.y + (segment.y2 - segment.y) * t)};
-      let b = {x: round(segment.x + (segment.x2 - segment.x) * u), y: round(segment.y + (segment.y2 - segment.y) * u)};
+      let a = {x: roundCoord(segment.x + (segment.x2 - segment.x) * t), y: roundCoord(segment.y + (segment.y2 - segment.y) * t)};
+      let b = {x: roundCoord(segment.x + (segment.x2 - segment.x) * u), y: roundCoord(segment.y + (segment.y2 - segment.y) * u)};
       if (distance(a, b) < EPS) continue;
       if (a.x > b.x || (a.x === b.x && a.y > b.y)) [a, b] = [b, a];
       const id = `${a.x},${a.y}:${b.x},${b.y}`;
@@ -106,13 +115,40 @@ export function projectToWall(wall, point) {
   return {x, y, t, distance: Math.hypot(point.x - x, point.y - y)};
 }
 
+/** Door hinge side and swing in wall-local terms, matching the 2D symbol (hinge at -u, leaf along local +y). */
+function doorSwing(wall, item) {
+  if (!Number.isFinite(item.rotation)) return {hinge: 'start', swing: -1};
+  const r = item.rotation * Math.PI / 180, ux = Math.cos(r), uy = Math.sin(r);
+  const dx = (wall.x2 - wall.x) / wall.length, dy = (wall.y2 - wall.y) / wall.length;
+  const along = ux * dx + uy * dy;
+  if (Math.abs(along) < 0.9) return {hinge: 'start', swing: -1};
+  const side = -Math.sin(r) * -dy + Math.cos(r) * dx;
+  return {hinge: along > 0 ? 'start' : 'end', swing: side >= 0 ? 1 : -1};
+}
+
 function openingOnWall(wall, item, synthetic = false) {
   const point = projectToWall(wall, item);
-  const desired = item.type === 'door' ? 42 : 70;
-  const width = Math.min(desired, wall.length - 10);
+  const width = Math.min(openingWidthUnits(item), wall.length - 10);
   if (width < 18) return null;
   const center = Math.max(width / 2 + 3, Math.min(wall.length - width / 2 - 3, point.t * wall.length));
-  return {id: item.id, type: item.type, start: (center - width / 2) / 50, end: (center + width / 2) / 50, bottom: item.type === 'door' ? 0 : 0.9, top: item.type === 'door' ? 2.12 : 2.15, synthetic};
+  const opening = {id: item.id, type: item.type, start: (center - width / 2) / 50, end: (center + width / 2) / 50, bottom: 0, top: 2.12, synthetic};
+  if (item.type === 'window') {
+    opening.bottom = Number.isFinite(item.sillHeight) ? Math.max(0, Math.min(2, item.sillHeight)) : 0.9;
+    opening.top = Math.min(2.4, opening.bottom + (Number.isFinite(item.height) && item.height > 0 ? item.height : 1.25));
+  } else if (!synthetic) Object.assign(opening, doorSwing(wall, item));
+  return opening;
+}
+
+/** Attach every door/window to its nearest wall. Shared by 3D, the 2D warnings and the TEK17 check. */
+export function assignOpenings(state = {}, walls = deriveWalls(state)) {
+  return (state.items || []).filter(item => item.type === 'door' || item.type === 'window').map(item => {
+    const candidate = walls.map(wall => ({wall, projection: projectToWall(wall, item)}))
+      .filter(entry => entry.projection.distance <= OPENING_ATTACH_DISTANCE && entry.wall.length > 28)
+      .sort((a, b) => a.projection.distance - b.projection.distance || b.wall.length - a.wall.length)[0];
+    return candidate
+      ? {item, wall: candidate.wall, projection: candidate.projection, exterior: candidate.wall.exterior, roomIds: candidate.wall.roomIds, offWall: false}
+      : {item, wall: null, projection: null, exterior: false, roomIds: [], offWall: true};
+  });
 }
 
 /** Subtract opening rectangles from a wall's elevation without a boolean-mesh library. */
@@ -172,19 +208,18 @@ function defaultsForRooms(rooms) {
 export function deriveSceneSpec(state = {}) {
   const rooms = (state.rooms || []).filter(room => [room.x, room.y, room.w, room.h].every(Number.isFinite) && room.w > 0 && room.h > 0);
   const walls = deriveWalls(state).map(wall => ({...wall, openings: []}));
-  for (const item of state.items || []) {
-    if (!['door', 'window'].includes(item.type)) continue;
-    const candidates = walls.map(wall => ({wall, projection: projectToWall(wall, item)})).filter(item => item.projection.distance <= 24 && item.wall.length > 28).sort((a, b) => a.projection.distance - b.projection.distance || b.wall.length - a.wall.length);
-    const candidate = candidates[0];
-    if (candidate) {
-      const opening = openingOnWall(candidate.wall, item);
-      if (opening) candidate.wall.openings.push(opening);
-    }
+  for (const entry of assignOpenings(state, walls)) {
+    if (entry.offWall) continue;
+    const opening = openingOnWall(entry.wall, entry.item);
+    if (opening) entry.wall.openings.push(opening);
   }
-  // Legacy example plans have implicit furniture/openings. Imported plans only
-  // use the user's traced geometry and explicitly placed openings.
+  // Legacy example plans saved before openings became items get implicit ones,
+  // per type, so explicit items are never duplicated by synthetic openings.
+  // Imported plans only use the user's traced geometry and explicit openings.
   if (state.variant !== 'custom' && !state.reference) {
-    for (const room of rooms) {
+    const hasDoors = (state.items || []).some(item => item.type === 'door');
+    const hasWindows = (state.items || []).some(item => item.type === 'window');
+    for (const room of hasDoors ? [] : rooms) {
       if (room.type === 'living') continue;
       const candidates = walls.filter(wall => wall.roomIds.includes(room.id) && wall.roomIds.length > 1 && wall.length >= 50 && !wall.openings.some(o => o.type === 'door'));
       candidates.sort((a, b) => {
@@ -196,7 +231,7 @@ export function deriveSceneSpec(state = {}) {
         if (opening) wall.openings.push(opening);
       }
     }
-    for (const room of rooms.filter(room => ['bedroom', 'living'].includes(room.type))) {
+    for (const room of hasWindows ? [] : rooms.filter(room => ['bedroom', 'living'].includes(room.type))) {
       const wall = walls.filter(wall => wall.exterior && wall.roomIds.includes(room.id) && wall.length >= 65 && !wall.openings.length).sort((a, b) => b.length - a.length)[0];
       if (!wall) continue;
       const opening = openingOnWall(wall, {id: `default-window-${room.id}`, type: 'window', x: (wall.x + wall.x2) / 2, y: (wall.y + wall.y2) / 2}, true);
