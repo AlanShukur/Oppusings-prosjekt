@@ -291,11 +291,13 @@ class Plan3DViewer {
     const group = new Group();
     group.position.set(wall.x / 50, 0, wall.y / 50);
     group.rotation.y = -Math.atan2(wall.y2 - wall.y, wall.x2 - wall.x);
-    const normal = this.material(wall.exterior ? PALETTE.wall : PALETTE.innerWall);
+    // A wall marked for demolition stays as a faint red ghost, so the opened-up space reads in 3D.
+    const demolish = wall.status === 'demolish';
+    const normal = demolish ? this.material('#d98a78', {transparent: true, opacity: 0.28, depthWrite: false}) : this.material(wall.exterior ? PALETTE.wall : PALETTE.innerWall);
     const ghost = this.material(wall.exterior ? PALETTE.wall : PALETTE.innerWall, {transparent: true, opacity: 0.13, depthWrite: false});
     for (const panel of wall.panels) {
       this.box(group, panel.end - panel.start, panel.top - panel.bottom, wall.thickness, (panel.start + panel.end) / 2, (panel.bottom + panel.top) / 2, 0, normal);
-      if (panel.bottom === 0) this.box(group, panel.end - panel.start, 0.075, wall.thickness + 0.014, (panel.start + panel.end) / 2, 0.0375, 0, '#dcd3c1', false);
+      if (panel.bottom === 0 && !demolish) this.box(group, panel.end - panel.start, 0.075, wall.thickness + 0.014, (panel.start + panel.end) / 2, 0.0375, 0, '#dcd3c1', false);
     }
     for (const opening of wall.openings) this.addOpening(group, opening, wall.thickness);
     this.content.add(group);

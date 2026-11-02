@@ -31,6 +31,32 @@ It checks:
 
 Screenshots and `results.json` go to `%TEMP%\romly-qa`. Read the PNGs to actually look at the result, and show the user any that matter. The exit code is 0 only when every check passes. Each run uses a fresh temporary Chrome profile, so it never sees the user's own projects and never leaves data behind.
 
+## Plan format check
+
+```bash
+node .claude/skills/romly-browser-qa/plan-version.mjs <base-url>
+```
+
+Run this after any change to the saved plan format (`PLAN_VERSION`). It puts two projects straight into IndexedDB: one saved before versioning and one marked version 99. It then checks:
+- **The old project:** it opens with its doors and windows and is re-saved in the current version.
+- **The version-99 project:** it is refused on startup and from the project list with the "reload" message, and is never overwritten.
+
+When a migration adds new fields, extend the script so it checks the migrated values too.
+
+## Wall check
+
+```bash
+node .claude/skills/romly-browser-qa/walls.mjs <base-url>
+```
+
+Run this after changing walls, the 2D editor's click handling or the inspector. It clicks the Stue / Soverom 1 wall with a real mouse event, then checks:
+- **The panel and drawing:** the "Vegg" panel opens; "Rives" and "Bærende" give the dashed red line, the right hint and the legend.
+- **Keys:** Delete removes nothing and Escape closes the panel.
+- **Persistence and 3D:** the note survives a reload, and 3D opens.
+- **Resetting:** going back to the default stores nothing.
+
+On a phone the panel is under the *Egenskaper* tab (`[data-workspace-panel="properties"]`), like the room and element panels.
+
 ## Writing a new check
 
 Put one-off scripts in the scratchpad and import the harness by absolute path. On Windows that path must be a `file:///` URL: a bare `C:/…` import fails with `ERR_UNSUPPORTED_ESM_URL_SCHEME`. Add a check to `smoke.mjs` only if it should guard every release.

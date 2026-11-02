@@ -14,6 +14,32 @@ const roundCoord = value => Math.round(value * 1000) / 1000;
 export const openingWidthUnits = item => Number.isFinite(item?.width) && item.width > 0 ? item.width * PLAN_UNITS_PER_METER : DEFAULT_OPENING_WIDTH[item?.type] ?? 70;
 const cross = (ax, ay, bx, by) => ax * by - ay * bx;
 const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+/** What a wall is doing in the project; 'existing' + 'unknown' is the unsaved default. */
+export const WALL_STATUSES = ['existing', 'new', 'demolish'];
+export const LOAD_BEARING = ['unknown', 'yes', 'no'];
+const SIDE_TOLERANCE = 0.01;
+
+function roomSide(room, wall) {
+  if (!room) return '?';
+  if (Math.abs(wall.y - wall.y2) < SIDE_TOLERANCE) {
+    if (Math.abs(wall.y - room.y) < SIDE_TOLERANCE) return 'top';
+    if (Math.abs(wall.y - (room.y + room.h)) < SIDE_TOLERANCE) return 'bottom';
+  } else if (Math.abs(wall.x - wall.x2) < SIDE_TOLERANCE) {
+    if (Math.abs(wall.x - room.x) < SIDE_TOLERANCE) return 'left';
+    if (Math.abs(wall.x - (room.x + room.w)) < SIDE_TOLERANCE) return 'right';
+  }
+  return '?';
+}
+
+/**
+ * A wall's identity for saved notes: the room sides that form it ("bed1:right|living:left"), or
+ * "item:<id>" for a drawn partition wall. Unlike the coordinate id it survives resizing and moving
+ * rooms. Pieces of one room side that face no other room share a key, and so share a note.
+ */
+function wallKey(wall, roomsById) {
+  if (wall.itemIds.length) return `item:${wall.itemIds[0]}`;
+  return wall.roomIds.map(id => `${id}:${roomSide(roomsById.get(id), wall)}`).join('|');
+}
 
 function addRectSegments(segments, room) {
   if (![room.x, room.y, room.w, room.h].every(Number.isFinite) || room.w <= 0 || room.h <= 0) return;
@@ -77,14 +103,23 @@ export function deriveWalls(state = {}) {
       for (const itemId of segment.itemIds) wall.itemIds.add(itemId);
     }
   }
-  return [...unique.values()].map(wall => ({
-    ...wall,
-    roomIds: [...wall.roomIds].sort(),
-    itemIds: [...wall.itemIds].sort(),
-    source: wall.itemIds.size ? 'item' : 'room',
-    exterior: wall.roomIds.size === 1,
-    length: Math.hypot(wall.x2 - wall.x, wall.y2 - wall.y),
-  }));
+  const roomsById = new Map((state.rooms || []).map(room => [room.id, room]));
+  const notes = new Map((state.walls || []).map(note => [note.key, note]));
+  return [...unique.values()].map(wall => {
+    const derived = {
+      ...wall,
+      roomIds: [...wall.roomIds].sort(),
+      itemIds: [...wall.itemIds].sort(),
+      source: wall.itemIds.size ? 'item' : 'room',
+      exterior: wall.roomIds.size === 1,
+      length: Math.hypot(wall.x2 - wall.x, wall.y2 - wall.y),
+    };
+    derived.key = wallKey(derived, roomsById);
+    const note = notes.get(derived.key);
+    derived.status = WALL_STATUSES.includes(note?.status) ? note.status : 'existing';
+    derived.loadBearing = LOAD_BEARING.includes(note?.loadBearing) ? note.loadBearing : 'unknown';
+    return derived;
+  });
 }
 
 export function getSceneBounds(state = {}) {
