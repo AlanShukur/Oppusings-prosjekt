@@ -1,0 +1,56 @@
+name: Deploy
+
+# Staging deploys on every push to main. Production only deploys when started by hand
+# (Actions → Deploy → Run workflow → production). Both skip cleanly until the Cloudflare
+# secrets exist; see docs/DEPLOY.md.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Where to deploy
+        type: choice
+        options: [staging, production]
+        default: staging
+
+concurrency:
+  group: deploy-${{ inputs.environment || 'staging' }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to ${{ inputs.environment || 'staging' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: ${{ inputs.environment || 'staging' }}
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Check that Cloudflare is configured
+        id: configured
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "Cloudflare secrets are not set, so nothing was deployed. See docs/DEPLOY.md." >> "$GITHUB_STEP_SUMMARY"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.configured.outputs.ready == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.configured.outputs.ready == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - if: steps.configured.outputs.ready == 'true'
+        run: npm ci
+      - name: Check and test before deploying
+        if: steps.configured.outputs.ready == 'true'
+        run: npm run check && npm test
+      - if: steps.configured.outputs.ready == 'true'
+        run: npm run build
+      - name: Deploy
+        if: steps.configured.outputs.ready == 'true'
+        run: node scripts/deploy-cloudflare.mjs --env ${{ inputs.environment || 'staging' }}

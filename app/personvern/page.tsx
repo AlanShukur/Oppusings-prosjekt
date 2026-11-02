@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { DraftNotice, LegalPage, LegalSection, STUDIO_URL } from "@/components/site-chrome";
+import { COMPANY, companyLine, filled } from "@/lib/company";
 
 export const metadata: Metadata = {
   title: "Personvern – Romly",
@@ -9,13 +10,15 @@ export const metadata: Metadata = {
 export default function Personvern() {
   return (
     <LegalPage title="Personvern" updated="2. november 2026">
-      <DraftNotice>
-        <strong>Utkast.</strong> Teksten beskriver hvordan Romly fungerer i dag. Opplysninger om hvem som er ansvarlig, og navnet på driftsleverandøren, mangler fortsatt, og teksten skal gjennomgås juridisk før lansering.
-      </DraftNotice>
+      {!COMPANY.legalReviewed && (
+        <DraftNotice>
+          <strong>Utkast.</strong> Teksten beskriver hvordan Romly fungerer i dag. Opplysninger om hvem som er ansvarlig, og navnet på driftsleverandøren, mangler fortsatt, og teksten skal gjennomgås juridisk før lansering.
+        </DraftNotice>
+      )}
 
       <LegalSection title="Kort fortalt">
         <p>
-          Romly krever ingen konto og samler ikke inn opplysninger om deg. Prosjektene dine, og filene du laster opp, lagres bare i nettleseren på enheten din. De sendes ikke til oss, og vi har ikke tilgang til dem.
+          Romly krever ingen konto og samler ikke inn opplysninger om deg. Prosjektene dine, og filene du laster opp, lagres bare i nettleseren på enheten din. De sendes ikke til oss, og vi har ikke tilgang til dem. Hvis appen krasjer, sendes en kort teknisk feilrapport uten innhold fra prosjektene dine (se «Feilrapporter»).
         </p>
       </LegalSection>
 
@@ -34,9 +37,15 @@ export default function Personvern() {
         <p>Romly har ikke kontoer, bruker ikke sporingskapsler eller analyseverktøy, og viser ikke annonser.</p>
       </LegalSection>
 
+      <LegalSection title="Feilrapporter">
+        <p>
+          Når noe går galt i designstudioet, sender nettleseren en kort feilrapport til serveren, slik at vi kan rette feilen. Rapporten inneholder feilteksten, hvor i koden feilen oppstod, hvilken side du var på og hvilken versjon av Romly du brukte. Den inneholder ikke tegninger, romnavn, filer eller annet innhold fra prosjektene dine. E-postadresser og lange tallrekker fjernes før rapporten lagres. Det sendes høyst fem rapporter hver gang siden lastes.
+        </p>
+      </LegalSection>
+
       <LegalSection title="Drift og tekniske logger">
         <p>
-          Nettstedet leveres av en driftsleverandør. Som for andre nettsteder kan leverandøren registrere tekniske opplysninger, som IP-adresse og tidspunkt, når sidene lastes. Det brukes til drift og sikkerhet. [Navn på driftsleverandør og lagringstid fylles inn.]
+          Nettstedet leveres av {filled(COMPANY.hostingProvider, "navn på driftsleverandør")}. Som for andre nettsteder kan leverandøren registrere tekniske opplysninger, som IP-adresse og tidspunkt, når sidene lastes. Det brukes til drift og sikkerhet. Feilrapportene og disse loggene lagres i {filled(COMPANY.logRetention, "lagringstid")}.
         </p>
       </LegalSection>
 
@@ -55,7 +64,7 @@ export default function Personvern() {
       </LegalSection>
 
       <LegalSection title="Kontakt">
-        <p>[Selskapsnavn, organisasjonsnummer, adresse og e-post fylles inn.]</p>
+        <p>Behandlingsansvarlig: {companyLine()}.</p>
         <p>
           Du kan også klage til <a href="https://www.datatilsynet.no" target="_blank" rel="noopener noreferrer">Datatilsynet</a>.
         </p>

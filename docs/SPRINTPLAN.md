@@ -76,12 +76,26 @@ Done on branch `sprint-1-local-first` (2 Nov):
 
 No longer needed while data stays on the device: EXIF stripping (photos never leave the device), server rate limiting, and D1/R2 backups. They come back with accounts.
 
-Remaining:
-- Staging and production environments.
-- Error monitoring that collects no personal data.
-- Optionally, privacy-friendly analytics. The privacy page must be updated first.
-- Fill in the company details and get the legal review.
-- *Acceptance:* a new user can use Romly from the landing page with no account, take a backup, delete everything, and restore from the backup.
+Also done (2 Nov):
+- **Error monitoring:**
+  - Studio crashes are reported to `/api/client-errors`, scrubbed, capped at 5 per page load, with no project content.
+  - The server writes them to Workers Logs, tagged with the environment. Server errors are logged the same way.
+  - The privacy page describes this.
+- **Staging and production:**
+  - `scripts/deploy-cloudflare.mjs` derives a `romly-staging` and a `romly` Worker from the build. Both have been dry-run.
+  - `.github/workflows/deploy.yml` deploys staging on every merge to `main`, and production only when started by hand.
+  - Setup steps are in `docs/DEPLOY.md`.
+- **Legal preparation:**
+  - Company and hosting details live in one place, `lib/company.ts`, which both pages read from.
+  - The draft banners disappear when `legalReviewed` is set.
+  - `docs/LEGAL-REVIEW.md` is a brief for the lawyer.
+
+Waiting on you:
+- Add `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` to GitHub (docs/DEPLOY.md, about 15 minutes). Staging then deploys on the next merge.
+- Fill in `lib/company.ts`, and send `docs/LEGAL-REVIEW.md` and the two pages to a lawyer.
+- Decide whether you want visitor statistics. If so, update the privacy page first.
+
+*Acceptance:* a new user can use Romly from the landing page with no account, take a backup, delete everything, and restore from the backup. Met in browser tests.
 
 ### Sprint 2: plan model v2 and sandbox quality
 - `plan.schemaVersion` and migrations (M-1, API-1).

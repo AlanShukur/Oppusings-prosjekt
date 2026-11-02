@@ -49,6 +49,9 @@ Arbeidsflaten følger vinduets bredde og høyde uten siderulling. Paneler og dia
 - `lib/projects-api.mjs`: validering, autorisasjon, revisjoner, D1 og R2. Inntil 1 GB filer per konto.
 - `public/studio/tek17-check.js`: regelmotoren for prosjektkontrollen. Terskler og kilder ble kontrollert 01.11.2026 og må kontrolleres på nytt når DiBK endrer veiledningen.
 - `docs/SPRINTPLAN.md`: plan fra dagens prototype til lansering.
+- `docs/DEPLOY.md` og `scripts/deploy-cloudflare.mjs`: staging (`romly-staging`) og produksjon (`romly`) på egen Cloudflare-konto. `.github/workflows/deploy.yml` publiserer staging ved hver sammenslåing til `main` og produksjon bare når den startes manuelt. Workflowen hopper over publisering til Cloudflare-hemmelighetene er lagt inn.
+- `public/studio/error-reporter.js` og `/api/client-errors`: krasjrapporter fra studioet, uten prosjektinnhold, skrives til serverloggen (Workers Logs) merket med miljø.
+- `lib/company.ts` og `docs/LEGAL-REVIEW.md`: selskapsopplysninger for personvern og vilkår på ett sted, og underlag til advokat.
 - `.github/workflows/ci.yml`: syntakssjekk og tester uten installasjon, deretter lint og bygging.
 - `db/schema.ts` og `drizzle/`: skjema og versjonerte migrasjoner.
 - `.openai/hosting.json`: eksisterende Site-ID og logiske `DB`/`BUCKET`-bindinger. Sites oppretter ressursene og anvender migrasjoner ved publisering.

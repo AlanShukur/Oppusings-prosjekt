@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { DraftNotice, LegalPage, LegalSection } from "@/components/site-chrome";
+import { COMPANY, companyLine, filled } from "@/lib/company";
 
 export const metadata: Metadata = {
   title: "Vilkår – Romly",
@@ -9,9 +10,11 @@ export const metadata: Metadata = {
 export default function Vilkar() {
   return (
     <LegalPage title="Vilkår for bruk" updated="2. november 2026">
-      <DraftNotice>
-        <strong>Utkast som skal gjennomgås av advokat før lansering.</strong> Selskapsopplysninger, ansvarsbegrensning og verneting er ikke ferdig formulert.
-      </DraftNotice>
+      {!COMPANY.legalReviewed && (
+        <DraftNotice>
+          <strong>Utkast som skal gjennomgås av advokat før lansering.</strong> Selskapsopplysninger, ansvarsbegrensning og verneting er ikke ferdig formulert.
+        </DraftNotice>
+      )}
 
       <LegalSection title="Om tjenesten">
         <p>
@@ -52,7 +55,8 @@ export default function Vilkar() {
       </LegalSection>
 
       <LegalSection title="Lovvalg og kontakt">
-        <p>Vilkårene reguleres av norsk rett. [Verneting, selskapsnavn, organisasjonsnummer og kontaktadresse fylles inn.]</p>
+        <p>Vilkårene reguleres av norsk rett. Verneting: {filled(COMPANY.venue, "verneting")}.</p>
+        <p>Tjenesten leveres av {companyLine()}.</p>
       </LegalSection>
     </LegalPage>
   );
