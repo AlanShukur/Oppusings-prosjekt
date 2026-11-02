@@ -19,7 +19,7 @@ test('a plan saved before versioning is migrated and stamped without changing th
   assert.equal(migrated.items.length,exampleOpenings(initialRooms).length);
   assert.equal(JSON.stringify(legacy),before);
   const custom={rooms:[room('a',0,0,100,100)],items:[],variant:'custom'};
-  assert.deepEqual(migratePlan(custom),{...custom,schemaVersion:PLAN_VERSION});
+  assert.deepEqual(migratePlan(custom),{...custom,walls:[],schemaVersion:PLAN_VERSION});
 });
 
 test('a current plan passes through unchanged, so migrating twice changes nothing', () => {

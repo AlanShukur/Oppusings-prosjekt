@@ -37,13 +37,24 @@ Romly is a Norwegian renovation planner. The **studio** (`public/studio/`) is a 
   - `getState()` stamps the version.
   - `loadState()` and `migratePlan()` upgrade older plans through `MIGRATIONS`.
   - A plan from a newer Romly throws `code: 'plan_too_new'` before anything changes, so it is never opened and overwritten.
+- **Wall notes (version 2):** `plan.walls` holds `{key, status, loadBearing}` only for walls that differ from the default (`existing` / `unknown`).
+  - **Keys:** a key names the room sides that form the wall (`bed1:left|living:right`), or is `item:<id>` for a drawn partition wall.
+  - **Annotated walls:** `deriveWalls` adds `key`, `status` and `loadBearing` to every wall, so 2D, 3D and the TEK17 check read the same values.
+  - **Lifetime:** a note survives resizes and moves while the rooms still share the wall. `notify()` drops notes whose wall is gone, and undo brings them back.
+  - **Shared keys:** pieces of one room side that face no other room share a key, and so share a note.
+  - **Editor API:** `selectWall`, `updateWall` and `wallNote`; `onWallSelect` drives the "Vegg" panel. Room walls are never deleted; `removeSelected` refuses while a wall is selected.
 
 ## Things that must change together
 
 - **A new room type:** `ROOM_TYPES` in `plan.js` and `ROOM_TYPES` in `lib/projects-api.mjs`, the `#room-type` `<option>` in `index.html`, and the `STAY` map in `tek17-check.js`.
 - **A new room, opening, building or measure field:** add it to the allowlist in `lib/projects-api.mjs` (`ROOM_FIELDS`, `OPENING_FIELDS`, `BUILDING_FIELDS` or `MEASURE_FIELDS`), with a range check and a test in `tests/projects-api.test.mjs`. `validateProjectPayload` silently **drops** unknown fields, so a missing entry loses data once server storage returns.
+- **A new wall status or load-bearing value:** update all four places:
+  - `WALL_STATUSES` / `LOAD_BEARING` in `scene-geometry.js`;
+  - the same sets in `lib/projects-api.mjs`;
+  - the `#wall-status` / `#wall-bearing` options in `index.html`;
+  - `wallStroke` in `plan.js` and the legend.
 - **A new studio JS file:** add `node --check public/studio/<file>.js` to the `check` script in `package.json`.
-- **A change to what a saved plan looks like:** bump `PLAN_VERSION` in `plan.js` and in `lib/projects-api.mjs` (a test keeps them equal). Add a `MIGRATIONS` entry that turns the previous version into the new one, and test it in `tests/plan-version.test.mjs`. Teach `PlanEditor.loadState` and the server validator to keep the new fields.
+- **A change to what a saved plan looks like:** bump `PLAN_VERSION` in `plan.js` and in `lib/projects-api.mjs` (a test keeps them equal). Add a `MIGRATIONS` entry that turns the previous version into the new one, and test it in `tests/plan-version.test.mjs`. Teach `PlanEditor.loadState` and the server validator to keep the new fields. Then run `.claude/skills/romly-browser-qa/plan-version.mjs` against the dev server.
 - **A change to the project or backup format:** update `validateProjectImport` in `app.js` (JSON import and restore) and `exportAll` in `local-store.js`.
 - **A change to storage behaviour:** change `local-store.js` and the server API together, or record why they differ. Their tests are `tests/local-store.test.mjs` and `tests/projects-api.test.mjs`.
 

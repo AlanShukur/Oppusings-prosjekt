@@ -1,4 +1,4 @@
-import { deriveWalls, getSceneBounds, projectToWall, assignOpenings, openingWidthUnits } from './scene-geometry.js';
+import { deriveWalls, getSceneBounds, projectToWall, assignOpenings, openingWidthUnits, WALL_STATUSES, LOAD_BEARING } from './scene-geometry.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const SCALE = 50;
@@ -75,9 +75,25 @@ export function upgradeExamplePlan(plan){
   return openings.length?{...plan,items:[...(plan.items||[]),...openings].slice(0,MAX_ITEMS)}:plan;
 }
 /** Version of the saved plan format. Bump it with a new MIGRATIONS entry whenever saved plans change shape, and keep PLAN_VERSION in lib/projects-api.mjs equal (a test checks). */
-export const PLAN_VERSION=1;
+export const PLAN_VERSION=2;
 // MIGRATIONS[n] turns a version n plan into version n+1. Version 0 is every plan saved before versioning.
-const MIGRATIONS=[upgradeExamplePlan];
+// 0 → 1: example plans get real doors and windows. 1 → 2: walls get saved notes (status, load-bearing); none exist yet.
+const MIGRATIONS=[upgradeExamplePlan,plan=>({...plan,walls:[]})];
+const MAX_WALL_NOTES=300;
+/** Wall notes from storage or an import: valid, unique, and only those that differ from the default. */
+function cleanWallNotes(list){
+  const notes=new Map();
+  for(const note of Array.isArray(list)?list:[]){
+    if(!note||typeof note.key!=='string'||note.key.length>400||notes.has(note.key)||!WALL_STATUSES.includes(note.status)||!LOAD_BEARING.includes(note.loadBearing))continue;
+    if(note.status!=='existing'||note.loadBearing!=='unknown')notes.set(note.key,{key:note.key,status:note.status,loadBearing:note.loadBearing});
+  }
+  return [...notes.values()].slice(0,MAX_WALL_NOTES);
+}
+/** Demolished walls are dashed red and new walls green; load-bearing walls are drawn wider by the caller. */
+function wallStroke(status,exterior,width){
+  if(status==='demolish')return `stroke="#c4553f" stroke-width="${width}" stroke-dasharray="${precise(width*1.4)} ${precise(width*.9)}" stroke-linecap="butt"`;
+  return `stroke="${status==='new'?'#2f7f6f':exterior?'#4e584e':'#626a60'}" stroke-width="${width}" stroke-linecap="square"`;
+}
 const planError=(message,code)=>Object.assign(new Error(message),{code});
 /** The plan in the current format; the input is not changed. Plans from a newer Romly are refused, because this code would drop what it does not know. */
 export function migratePlan(plan){
@@ -95,17 +111,18 @@ function doorway(x,y,orientation='right',size=38){let transform = orientation===
 function windowMark(x,y,length=80,vertical=false){return `<g transform="translate(${x} ${y})${vertical?' rotate(90)':''}"><path d="M0 0H${length}" stroke="#fbfdfd" stroke-width="10"/><path d="M0-4H${length}M0 4H${length}M0 0H${length}" stroke="#9bb8bd" stroke-width="1.4"/><path d="M0-5V5M${length/2}-4V4M${length}-5V5" stroke="#819ea4" stroke-width="1.4"/></g>`;}
 
 export class PlanEditor {
-  constructor(container, {onSelect=()=>{},onChange=()=>{},onViewError=()=>{},onNotice=()=>{},onItemSelect=()=>{},onZoom=()=>{}}={}) {
+  constructor(container, {onSelect=()=>{},onChange=()=>{},onViewError=()=>{},onNotice=()=>{},onItemSelect=()=>{},onWallSelect=()=>{},onZoom=()=>{}}={}) {
     this.container=container;
     this.onSelect=onSelect;
     this.onChange=onChange;
     this.onViewError=onViewError;
     this.onNotice=onNotice;
     this.onItemSelect=onItemSelect;
+    this.onWallSelect=onWallSelect;
     this.onZoom=onZoom;
-    this.state={rooms:clone(initialRooms),items:exampleOpenings(initialRooms),variant:'balanced'};
+    this.state={rooms:clone(initialRooms),items:exampleOpenings(initialRooms),variant:'balanced',walls:[]};
     this.selected='living';
-    this.selectedItem=null;
+    this.selectedItem=null;this.selectedWall=null;this.wallSignature='';
     this.tool='select';this.view='2d';this.zoom=100;this.viewport=null;
     this.layers={dimensions:true,furniture:true,reference:true};
     this.history=[];this.future=[];
@@ -127,11 +144,11 @@ export class PlanEditor {
   isExample(){return !this.state.reference&&this.state.variant!=='custom'&&EXAMPLE_ROOM_IDS.every(id=>this.state.rooms.some(room=>room.id===id));}
   selectRoom(id){if(!this.state.rooms.some(room=>room.id===id))return;this.selected=id;this.selectedItem=null;this.render();this.onSelect(clone(this.room()));}
   checkpoint(){this.history.push(this.getState());if(this.history.length>40)this.history.shift();this.future=[];}
-  notify(){this.onChange(this.getState());const room=this.room();this.onSelect(room?clone(room):null);}
+  notify(){this.pruneWallNotes();this.onChange(this.getState());const room=this.room();this.onSelect(room?clone(room):null);}
   loadState(state){
     if(!state||!Array.isArray(state.rooms))throw new Error('Plantegningen kunne ikke leses.');
     state=migratePlan(state);
-    this.state={rooms:clone(state.rooms),items:clone(state.items||[]),variant:state.variant||'balanced'};
+    this.state={rooms:clone(state.rooms),items:clone(state.items||[]),variant:state.variant||'balanced',walls:cleanWallNotes(state.walls)};this.selectedWall=null;
     if(state.reference)this.state.reference=clone(state.reference);
     this.history=[];this.future=[];this.drag=null;this.selectedItem=null;this.wallStart=null;this.wallEnd=null;this.roomStart=null;this.roomEnd=null;
     this.referenceImage=null;this.viewGeneration++;this.viewer?.dispose();this.viewer=null;this.view='2d';this.viewport=null;
@@ -142,8 +159,8 @@ export class PlanEditor {
     if(!reference||!Number.isFinite(reference.w)||!Number.isFinite(reference.h)||reference.w<=0||reference.h<=0)throw new Error('Plantegningen mangler gyldig målestokk.');
     this.checkpoint();
     if(reference.fileId!==this.state.reference?.fileId)this.referenceImage=null;
-    this.state=replace?{rooms:[],items:[],variant:'custom',reference:clone(reference)}:{...this.state,variant:'custom',reference:clone(reference)};
-    this.selected=replace?null:this.selected;this.selectedItem=null;this.drag=null;this.wallStart=null;this.roomStart=null;
+    this.state=replace?{rooms:[],items:[],variant:'custom',walls:[],reference:clone(reference)}:{...this.state,variant:'custom',reference:clone(reference)};
+    this.selected=replace?null:this.selected;this.selectedItem=null;this.selectedWall=null;this.drag=null;this.wallStart=null;this.roomStart=null;
     if(replace){this.zoom=100;this.viewport=null;this.onZoom(100);}
     this.render();this.notify();
   }
@@ -207,7 +224,7 @@ export class PlanEditor {
   undo(){if(!this.history.length)return false;this.future.push(this.getState());this.state=this.history.pop();this.selected=this.state.rooms.find(r=>r.id===this.selected)?.id||this.state.rooms[0]?.id;this.selectedItem=null;this.render();this.notify();return true;}
   redo(){if(!this.future.length)return false;this.history.push(this.getState());this.state=this.future.pop();this.selected=this.state.rooms.find(r=>r.id===this.selected)?.id||this.state.rooms[0]?.id;this.selectedItem=null;this.render();this.notify();return true;}
   setVariant(id){
-    this.checkpoint();this.state={rooms:clone(initialRooms),items:[],variant:id};
+    this.checkpoint();this.state={rooms:clone(initialRooms),items:[],variant:id,walls:[]};this.selectedWall=null;
     if(id==='family'||id==='three'||id==='3'||id==='03'){
       const room=this.state.rooms.find(room=>room.id==='living');room.h=270;room.height=5.4;room.area=room.w*room.h/SCALE**2;
       this.state.rooms.push({id:'bed3',name:'Soverom 3',type:'bedroom',x:140,y:370,w:175,h:160,width:3.5,height:3.2,area:11.2,color:'#e8e6db'});
@@ -221,7 +238,7 @@ export class PlanEditor {
   }
   /** True when switching suggestion would discard the user's own work. */
   hasCustomEdits(){
-    if(this.isCustom())return true;
+    if(this.isCustom()||this.state.walls?.length)return true;
     const pristine=new Map(exampleOpenings(this.state.rooms).map(item=>[item.id,JSON.stringify(item)]));
     if(this.state.items.some(item=>pristine.get(item.id)!==JSON.stringify(item))||this.state.items.length!==pristine.size)return true;
     const base=new Map(initialRooms.map(room=>[room.id,room]));
@@ -341,13 +358,30 @@ export class PlanEditor {
     return clone(item);
   }
   removeSelected(){
+    if(this.selectedWall&&!this.selectedItem)return false; // a room wall is changed through its status, never deleted
     if(this.selectedItem){this.checkpoint();this.state.items=this.state.items.filter(item=>item.id!==this.selectedItem);this.selectedItem=null;this.render();this.notify();return true;}
     // Example rooms tile a fixed outline; rooms the user added or traced can always be removed.
     if(this.selected&&(this.state.variant==='custom'||!EXAMPLE_ROOM_IDS.includes(this.selected))){this.checkpoint();this.state.rooms=this.state.rooms.filter(room=>room.id!==this.selected);this.selected=this.state.rooms[0]?.id;this.render();this.notify();return true;}
     return false;
   }
   selectedItemState(){const item=this.state.items.find(item=>item.id===this.selectedItem);return item?clone(item):null;}
-  clearItemSelection(){if(!this.selectedItem)return false;this.selectedItem=null;this.render();return true;}
+  clearItemSelection(){if(!this.selectedItem&&!this.selectedWall)return false;this.selectedItem=null;this.selectedWall=null;this.render();return true;}
+  /** The saved note for a wall key, or the default when none is saved. */
+  wallNote(key){const note=(this.state.walls||[]).find(note=>note.key===key);return note?clone(note):{key,status:'existing',loadBearing:'unknown'};}
+  selectWall(key){if(!getWallSegments(this.state).some(wall=>wall.key===key))return false;this.selectedWall=key;this.selectedItem=null;this.render();return true;}
+  /** Sets a wall's status and/or load-bearing. A wall back at the default stores nothing. */
+  updateWall(key,patch){
+    if(typeof key!=='string'||!getWallSegments(this.state).some(wall=>wall.key===key))return false;
+    const note=this.wallNote(key);
+    if(patch.status!==undefined){if(!WALL_STATUSES.includes(patch.status))return false;note.status=patch.status;}
+    if(patch.loadBearing!==undefined){if(!LOAD_BEARING.includes(patch.loadBearing))return false;note.loadBearing=patch.loadBearing;}
+    this.checkpoint();
+    const rest=(this.state.walls||[]).filter(entry=>entry.key!==key);
+    this.state.walls=note.status==='existing'&&note.loadBearing==='unknown'?rest:[...rest,note].slice(-MAX_WALL_NOTES);
+    this.render();this.notify();return true;
+  }
+  /** Notes belong to walls that exist: a resize that keeps two rooms touching keeps their wall's note. */
+  pruneWallNotes(){if(!this.state.walls?.length)return;const keys=new Set(getWallSegments(this.state).map(wall=>wall.key));this.state.walls=this.state.walls.filter(note=>keys.has(note.key));}
   /** Doors and windows flip (180°) so they stay on their wall; furniture and partitions turn freely. */
   rotateSelected(delta=90){
     const item=this.state.items.find(item=>item.id===this.selectedItem);if(!item)return false;
@@ -492,8 +526,10 @@ export class PlanEditor {
       if(item.type==='door'||item.type==='window'){const wall=this.nearestWall(item);if(wall)flip=Math.cos(((item.rotation||0)-wallAngle(wall.wall))*Math.PI/180)<0;}
       this.drag={type:'item',pointerId:event.pointerId,start:point,item:clone(item),state:this.getState(),future,moved:false,flip};this.capture(event);this.render();return;
     }
+    const wallEl=event.target.closest?.('[data-wall-key]');
+    if(wallEl&&this.tool==='select'){this.selectWall(wallEl.dataset.wallKey);return;}
     if(roomEl){
-      this.selected=roomEl.dataset.roomId;this.selectedItem=null;
+      this.selected=roomEl.dataset.roomId;this.selectedItem=null;this.selectedWall=null;
       if(this.tool==='select'&&this.isCustom()){const future=this.future;this.checkpoint();this.drag={type:'move',pointerId:event.pointerId,start:point,room:clone(this.room()),state:this.getState(),future,moved:false};this.capture(event);}
       this.render();this.onSelect(clone(this.room()));return;
     }
@@ -589,8 +625,8 @@ export class PlanEditor {
 
   itemMarkup(item,detached=false){
     if(item.type==='wall'){
-      const dx=(item.x2??item.x+90)-item.x,dy=(item.y2??item.y)-item.y;
-      return `<g data-item-id="${clean(item.id)}" transform="translate(${item.x} ${item.y})" style="cursor:move">${this.selectedItem===item.id?`<path d="M0 0L${dx} ${dy}" stroke="#9275c6" stroke-width="13" stroke-dasharray="4 3" opacity=".5" data-selection="true"/>`:''}<path d="M0 0L${dx} ${dy}" stroke="#5a625a" stroke-width="7" stroke-linecap="square"/><path d="M0 0L${dx} ${dy}" stroke="transparent" stroke-width="20"/></g>`;
+      const dx=(item.x2??item.x+90)-item.x,dy=(item.y2??item.y)-item.y,note=this.wallNote(`item:${item.id}`);
+      return `<g data-item-id="${clean(item.id)}" transform="translate(${item.x} ${item.y})" style="cursor:move">${this.selectedItem===item.id?`<path d="M0 0L${dx} ${dy}" stroke="#9275c6" stroke-width="13" stroke-dasharray="4 3" opacity=".5" data-selection="true"/>`:''}<path d="M0 0L${dx} ${dy}" fill="none" ${wallStroke(note.status,false,note.loadBearing==='yes'?10:7)}/><path d="M0 0L${dx} ${dy}" stroke="transparent" stroke-width="20"/></g>`;
     }
     const span=openingWidthUnits(item);
     let inner='';switch(item.type){case 'window':inner=windowMark(-span/2,0,span);break;case 'door':inner=doorway(-span/2,0,'right',span);break;case 'plant':inner=plant(0,0,17);break;case 'bed':inner=bed(-32,-44,64,88);break;case 'sofa':inner=rect(-42,-22,84,44,'#cbd4c3',7,'#8fa082')+rect(-35,-17,31,32,'#e1e7db',5,'#a8b59b')+rect(3,-17,31,32,'#e1e7db',5,'#a8b59b');break;default:inner=rect(-33,-22,66,44,'#e7d6b8',15,'#b6a186');}
@@ -623,7 +659,16 @@ export class PlanEditor {
       return `<g pointer-events="none" text-anchor="middle" fill="#515a50" font-family="Arial,sans-serif"><text x="${x}" y="${y}" font-size="${11.5*fontScale}" font-weight="600" paint-order="stroke" stroke="#fff" stroke-width="${reference?2:0}">${clean(room.name)}</text><text x="${x}" y="${y+16*fontScale}" font-size="${10*fontScale}" fill="#747d70" paint-order="stroke" stroke="#fff" stroke-width="${reference?2:0}">${format(room.area)} m²</text>${room.w>=60&&room.h>=60?`<text x="${x}" y="${y+29*fontScale}" font-size="${9*fontScale}" fill="#8e9688" paint-order="stroke" stroke="#fff" stroke-width="${reference?2:0}">${format(room.width)} × ${format(room.height)} m</text>`:''}</g>`;
     }).join(''):'';
     // Walls come from the same derived segments as 3D and the TEK17 check, also for example plans.
-    const walls=wallSegments.filter(wall=>wall.source==='room').map(wall=>`<path d="M${wall.x} ${wall.y}L${wall.x2} ${wall.y2}" fill="none" stroke="${wall.exterior?'#4e584e':'#626a60'}" stroke-width="${wall.exterior?(example?9:7):(example?6:5)}" stroke-linecap="square"/>`).join('');
+    // A wall note follows its key; a selection whose wall no longer exists (resize, undo) is dropped.
+    if(this.selectedItem||(this.selectedWall&&!wallSegments.some(wall=>wall.key===this.selectedWall)))this.selectedWall=null;
+    const roomWalls=wallSegments.filter(wall=>wall.source==='room');
+    const wallPath=wall=>`M${wall.x} ${wall.y}L${wall.x2} ${wall.y2}`;
+    const walls=roomWalls.map(wall=>{
+      const width=(wall.exterior?(example?9:7):(example?6:5))+(wall.loadBearing==='yes'?3:0);
+      const highlight=wall.key===this.selectedWall?`<path d="${wallPath(wall)}" stroke="#9275c6" stroke-width="${width+10}" stroke-linecap="round" opacity=".4" data-selection="true" pointer-events="none"/>`:'';
+      return `${highlight}<path d="${wallPath(wall)}" fill="none" ${wallStroke(wall.status,wall.exterior,width)}/>`;
+    }).join('');
+    const wallHits=this.tool==='select'&&!this.exporting?roomWalls.map(wall=>`<path data-wall-key="${clean(wall.key)}" d="${wallPath(wall)}" stroke="transparent" stroke-width="12" style="cursor:pointer"/>`).join(''):'';
     let dimensions='';
     if(this.layers.dimensions&&(rooms.length||reference)){
       const measured=getPlanBounds(rooms.length?{rooms,items:[]}:{rooms,items:[],reference});
@@ -631,20 +676,31 @@ export class PlanEditor {
       dimensions=`<g fill="none" stroke="#a8aca3" stroke-width="${.8*fontScale}" pointer-events="none"><path d="M${measured.minX} ${top}H${measured.maxX}M${measured.minX} ${top-6*fontScale}V${top+6*fontScale}M${measured.maxX} ${top-6*fontScale}V${top+6*fontScale}M${left} ${measured.minY}V${measured.maxY}M${left-6*fontScale} ${measured.minY}H${left+6*fontScale}M${left-6*fontScale} ${measured.maxY}H${left+6*fontScale}"/></g><g fill="#8e9688" font-family="Arial,sans-serif" font-size="${10*fontScale}" text-anchor="middle" pointer-events="none"><text x="${measured.centerX}" y="${top-8*fontScale}">${format(measured.width/SCALE)} m</text><text transform="translate(${left-8*fontScale} ${measured.centerY}) rotate(-90)">${format(measured.height/SCALE)} m</text></g>`;
     }
     const inset=3,handle=Math.max(8,Math.min(16,12*fontScale));
-    const selection=selected&&!this.selectedItem?`<g data-selection="true"><rect x="${selected.x+inset}" y="${selected.y+inset}" width="${Math.max(1,selected.w-inset*2)}" height="${Math.max(1,selected.h-inset*2)}" fill="#8b6ac808" stroke="#9275c6" stroke-width="1.5" stroke-dasharray="5 4" pointer-events="none"/><rect data-resize="true" x="${selected.x+selected.w-handle/2}" y="${selected.y+selected.h-handle/2}" width="${handle}" height="${handle}" rx="3" fill="#fff" stroke="#8b6ac8" stroke-width="2" style="cursor:nwse-resize"/></g>`:'';
+    const selection=selected&&!this.selectedItem&&!this.selectedWall?`<g data-selection="true"><rect x="${selected.x+inset}" y="${selected.y+inset}" width="${Math.max(1,selected.w-inset*2)}" height="${Math.max(1,selected.h-inset*2)}" fill="#8b6ac808" stroke="#9275c6" stroke-width="1.5" stroke-dasharray="5 4" pointer-events="none"/><rect data-resize="true" x="${selected.x+selected.w-handle/2}" y="${selected.y+selected.h-handle/2}" width="${handle}" height="${handle}" rx="3" fill="#fff" stroke="#8b6ac8" stroke-width="2" style="cursor:nwse-resize"/></g>`:'';
     const wallPreview=this.wallStart&&this.wallEnd?`<path d="M${this.wallStart.x} ${this.wallStart.y}L${this.wallEnd.x} ${this.wallEnd.y}" stroke="#9275c6" stroke-width="6" stroke-dasharray="5 4" pointer-events="none"/>`:'';
     let roomPreview='';
     if(this.roomStart&&this.roomEnd){
       const x=Math.min(this.roomStart.x,this.roomEnd.x),y=Math.min(this.roomStart.y,this.roomEnd.y),w=Math.abs(this.roomEnd.x-this.roomStart.x),h=Math.abs(this.roomEnd.y-this.roomStart.y);
       roomPreview=`<g pointer-events="none"><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#a78bd52b" stroke="#9275c6" stroke-width="2" stroke-dasharray="5 4"/><text x="${x+w/2}" y="${y+h/2}" text-anchor="middle" font-family="Arial,sans-serif" font-size="${12*fontScale}" fill="#7354ac">${format(w/SCALE)} × ${format(h/SCALE)} m</text></g>`;
     }
-    const body=referenceMarkup+roomFills+(this.layers.furniture?this.furniture():'')+roomHitboxes+walls+labels+this.state.items.map(item=>this.itemMarkup(item,detached.has(item.id))).join('')+selection+wallPreview+roomPreview;
+    const body=referenceMarkup+roomFills+(this.layers.furniture?this.furniture():'')+roomHitboxes+walls+wallHits+labels+this.state.items.map(item=>this.itemMarkup(item,detached.has(item.id))).join('')+selection+wallPreview+roomPreview;
     const clips=rooms.map(room=>`<clipPath id="clip-${clean(room.id)}"><rect x="${room.x+3}" y="${room.y+3}" width="${Math.max(1,room.w-6)}" height="${Math.max(1,room.h-6)}"/></clipPath>`).join('');
     this.container.innerHTML=`<svg xmlns="${NS}" width="100%" height="100%" viewBox="${viewBox}" role="img" aria-label="Redigerbar plantegning. Velg et rom, eller tegn rom over ditt eget underlag." style="display:block;overflow:visible;touch-action:none;user-select:none"><defs>${clips}<pattern id="wood" patternUnits="userSpaceOnUse" width="16" height="90"><path d="M0 0V90M16 0V90M0 0H16M0 45H8M8 90V45" stroke="#baab8f" stroke-width=".6" fill="none"/></pattern><pattern id="tiles" patternUnits="userSpaceOnUse" width="22" height="22"><path d="M0 0H22V22H0Z" stroke="#acbec5" stroke-width=".7" fill="none"/></pattern></defs><g>${body}</g>${dimensions}</svg>`;
     if(!this.exporting){
       const item=this.selectedItem?this.state.items.find(item=>item.id===this.selectedItem):null;
       const signature=item?JSON.stringify(item)+detached.has(item.id):'';
       if(signature!==this.itemSignature){this.itemSignature=signature;this.onItemSelect(item?{...clone(item),detached:detached.has(item.id)}:null);}
+      // The wall panel follows a selected room wall, or a selected drawn partition wall.
+      const key=item?(item.type==='wall'?`item:${item.id}`:null):this.selectedWall;
+      const pieces=key?wallSegments.filter(wall=>wall.key===key):[];
+      let wall=null;
+      if(key&&(pieces.length||item)){
+        const note=this.wallNote(key),partition=key.startsWith('item:');
+        const length=partition?Math.hypot((item.x2??item.x+90)-item.x,(item.y2??item.y)-item.y):pieces.reduce((sum,piece)=>sum+piece.length,0);
+        wall={key,status:note.status,loadBearing:note.loadBearing,partition,exterior:!partition&&pieces.every(piece=>piece.exterior),length:precise(length/SCALE),rooms:partition?[]:[...new Set(pieces.flatMap(piece=>piece.roomIds))].map(id=>rooms.find(room=>room.id===id)?.name).filter(Boolean)};
+      }
+      const wallSignature=wall?JSON.stringify(wall):'';
+      if(wallSignature!==this.wallSignature){this.wallSignature=wallSignature;this.onWallSelect(wall);}
     }
   }
 }

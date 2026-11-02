@@ -9,16 +9,16 @@ Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it sho
   - landing and legal pages;
   - crash reports;
   - staging and production deploys.
-- **Staging:** https://romly-staging.romly.workers.dev. It deploys automatically on every merge to `main`. Last checked 2026-11-02: smoke test 13/13 on `main` at `2d19c08` (after PR #5).
+- **Staging:** https://romly-staging.romly.workers.dev. It deploys automatically on every merge to `main`. Last checked 2026-11-02: smoke test 13/13 and plan-version check 9/9 on `main` at `d498876` (after PR #6).
 - **Production:** https://romly.romly.workers.dev has not been deployed yet.
-- **Sprint 2 in progress** (`docs/SPRINTPLAN.md`) on branch `sprint-2-plan-model`.
-  - Step 1 is done and in an open PR: the plan format version and migrations (`PLAN_VERSION = 1`).
+- **Sprint 2 in progress** (`docs/SPRINTPLAN.md`).
+  - Step 1 is merged (PR #6): the plan format version and migrations.
+  - Step 2 is in an open PR (branch `sprint-2-walls`): wall notes (existing/new/demolish, load-bearing yes/no/unknown), the "Vegg" panel, 2D and 3D styling and the legend. `PLAN_VERSION = 2`.
   - Next steps:
-    1. Walls as their own elements, with existing/new/demolish status and a load-bearing flag.
-    2. A "today's layout" baseline.
-    3. Check rules that use them.
-    4. Splitting `app.js`.
-- **Tests:** 133 unit tests (`npm test`) and the browser smoke test (`romly-browser-qa`).
+    1. A "today's layout" baseline.
+    2. Check rules that use the wall notes. For example, demolishing a load-bearing or unknown wall should ask questions and flag a likely application. Verify against DiBK first. The TEK17 check does not read wall status yet.
+    3. Splitting `app.js`.
+- **Tests:** 143 unit tests (`npm test`). Browser checks in `romly-browser-qa`: `smoke.mjs`, `plan-version.mjs` and `walls.mjs`.
 
 ## Decisions
 
@@ -27,11 +27,13 @@ Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it sho
 - **Deploys:** staging deploys on merge; production deploys only when the user starts it. Never use "Re-run" on an old Deploy run; a guard step blocks it.
 - **TEK17:** the check is indicative only. Ruleset `2026-11-01`, verified 01.11.2026. The tiltakshaver is responsible.
 - **Plan format (2026-11-02):** saved plans carry `schemaVersion`, and older ones are migrated on load. A plan from a newer Romly is refused with "Last inn siden på nytt", never opened and overwritten. The server keeps the version and refuses newer ones too.
+- **Wall identity (2026-11-02):** a wall is identified by the room sides that form it (`bed1:left|living:right`) or by `item:<id>` for a drawn partition wall, so its note survives resizes and moves. Only non-default notes are stored. A note is dropped when its wall stops existing, and undo restores it. Room walls are never deleted, only marked.
 - **Language:** UI text is Norwegian bokmål; docs for the team are in English, except `README.md` and `docs/LEGAL-REVIEW.md`.
 
 ## Waiting on the user
 
-- **Merge the Sprint 2, step 1 PR** (branch `sprint-2-plan-model`). After merging, verify the staging deploy and run the smoke test.
+- **Merge the Sprint 2, step 2 PR** (branch `sprint-2-walls`). After merging, verify the staging deploy and run `smoke.mjs`, `plan-version.mjs` and `walls.mjs` against staging.
+
 
 - **Production deploy:** run *Actions → Deploy → Run workflow → production* as a new run. Optionally add a required reviewer on the `production` environment.
 - **Legal:** fill in `lib/company.ts` and get the legal review (`docs/LEGAL-REVIEW.md`). The legal pages show a draft notice until `legalReviewed` is true.
@@ -39,9 +41,21 @@ Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it sho
 - **Old OpenAI Sites copy:** decide whether to keep or retire it.
 - **Stale branches:** optionally delete `sprint-0-editor-tek17`, `sprint-1-local-first`, `docs-deploy-subdomain`, `fix-landing-links` and `deploy-guard`.
 - **Open request:** fixing what /usage flagged and moving search agents to a cheaper model needs the /usage output first. Show each change before making it.
-- **Stale branches (continued):** `claude-skills-memory` can be deleted too.
+- **Stale branches (continued):** `claude-skills-memory` and `sprint-2-plan-model` can be deleted too.
 
 ## Task log (newest first)
+
+- **2026-11-02:** Sprint 2, step 2, on branch `sprint-2-walls`. Committed and PR opened.
+  - **Format and editor:** `PLAN_VERSION` is now 2, with migration 1→2 adding `walls: []`. `deriveWalls` gives keys and notes. The editor has wall selection and `updateWall`; notes are pruned in `notify`.
+  - **UI:** the "Vegg" panel (Status, Bærende, practical hints only), dashed red for demolished walls, green for new, wider for load-bearing, a legend, and a faint red ghost in 3D.
+  - **Server:** validates wall keys and notes.
+  - **Tests:** 10 new unit tests (`tests/walls.test.mjs`); 143 of 143 pass. Browser checks: walls 14/14, version 10/10, smoke 13/13, phone layout 5/5.
+  - **Skills:** added `walls.mjs` to `romly-browser-qa`; `plan-version.mjs` now checks the migrated `walls` list.
+
+- **2026-11-02:** PR #6 (Sprint 2, step 1) merged.
+  - Deploy run 41498589943 succeeded. On staging: smoke test 13/13 and plan-version check 9/9. Local `main` is at `d498876`.
+  - The plan-version browser check moved into the `romly-browser-qa` skill as `plan-version.mjs`, reading the version from the page.
+  - These edits are uncommitted on `main`; they go in with the step 2 branch.
 
 - **2026-11-02:** Sprint 2, step 1, on branch `sprint-2-plan-model`. Committed and PR opened.
   - **Plan format version:** `PLAN_VERSION`, `migratePlan` and `MIGRATIONS` in `plan.js`; the old example-openings upgrade became migration 0→1. The editor stamps the version and migrates on load. Opening, startup, recovery and import all refuse plans from a newer Romly. The server keeps the version and refuses newer ones.

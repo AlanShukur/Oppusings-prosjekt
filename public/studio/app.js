@@ -115,7 +115,7 @@ function selectRoom(r){
   for(const el of document.querySelectorAll('#room-name,#room-width,#room-height,#room-type,[data-material],#rename-room,#room-ceiling,#room-previous-use'))el.disabled=!r;
   document.querySelectorAll('.material').forEach(b=>b.classList.toggle('active',b.dataset.material===r?.color));renderRooms();
 }
-editor=new PlanEditor($('#floorplan'),{onSelect:selectRoom,onChange:state=>persist(state),onViewError:error=>{reportProblem(error,{context:'3d'});setView('2d');toast(error.message||'3D ble avbrutt. Tegningen er åpnet i 2D.');},onNotice:toast,onItemSelect:showItem,onZoom:value=>{zoom=value;$('#zoom-value').textContent=value+' %';}});
+editor=new PlanEditor($('#floorplan'),{onSelect:selectRoom,onChange:state=>{persist(state);updateWallLegend(state);},onViewError:error=>{reportProblem(error,{context:'3d'});setView('2d');toast(error.message||'3D ble avbrutt. Tegningen er åpnet i 2D.');},onNotice:toast,onItemSelect:showItem,onWallSelect:showWall,onZoom:value=>{zoom=value;$('#zoom-value').textContent=value+' %';}});
 const initialPlan=editor.getState();
 function renderProject(){$('#project-title').textContent=project.name;$('#breadcrumb-title').textContent=project.name;$('#variant-name').textContent=editor?.getState().variant==='custom'?'Egen':project.variant;$('.prototype-label').textContent=activeRecord?'Tidlig produktversjon · Ditt prosjekt':'Eksempelvisning · Ikke lagret';}
 renderProject();selectRoom(rooms().find(r=>r.id===selectedId)||rooms()[0]);
@@ -149,9 +149,20 @@ $('#item-delete').onclick=()=>editor.removeSelected();
 for(const [id,key] of [['item-width','width'],['item-height','height'],['item-sill','sillHeight']])$('#'+id).addEventListener('change',e=>{if(!shownItem)return;const value=decimal(e.target.value);if(value!==null&&!Number.isFinite(value)){toast('Skriv målet i meter, for eksempel 1,2.');showItem(shownItem);return;}const before=shownItem[key];editor.updateItem(shownItem.id,{[key]:value});const after=editor.selectedItemState();if(after&&value!==null&&after[key]===before)toast('Målet er utenfor det som er mulig for dette elementet.');if(after)showItem({...after,detached:shownItem.detached});});
 $('#item-escape').onchange=e=>shownItem&&editor.updateItem(shownItem.id,{escape:e.target.checked});
 $('#item-entrance').onchange=e=>shownItem&&editor.updateItem(shownItem.id,{entrance:e.target.checked});
+let shownWall=null;
+function showWall(wall){
+  shownWall=wall;const panel=$('#wall-properties');panel.hidden=!wall;if(!wall)return;
+  $('#wall-title').textContent=wall.partition?'Skillevegg':wall.exterior?'Yttervegg':'Innervegg';$('#wall-length').textContent=fmt(wall.length)+' m';
+  $('#wall-between').textContent=wall.partition?'Tegnet med veggverktøyet.':wall.rooms.length>1?`Mellom ${wall.rooms.join(' og ')}`:wall.rooms[0]?`${wall.rooms[0]} – mot det fri`:'';
+  $('#wall-status').value=wall.status;$('#wall-bearing').value=wall.loadBearing;
+  $('#wall-hint').textContent=wall.status==='demolish'&&wall.loadBearing==='yes'?'En bærende vegg kan ikke bare fjernes. En fagperson må vurdere konstruksjonen og hvordan lastene skal tas opp.':wall.status==='demolish'&&wall.loadBearing==='unknown'?'Finn ut om veggen er bærende før du planlegger å rive den. Spør en fagperson hvis du er usikker.':'Marker om veggen skal stå, rives eller bygges ny, og om den er bærende.';
+}
+$('#wall-status').onchange=e=>shownWall&&editor.updateWall(shownWall.key,{status:e.target.value});
+$('#wall-bearing').onchange=e=>shownWall&&editor.updateWall(shownWall.key,{loadBearing:e.target.value});
+function updateWallLegend(state){$('#wall-legend').hidden=!state?.walls?.length;}
 $('#rename-room').onclick=()=>{$('#room-name').focus();$('#room-name').select();};
 document.querySelectorAll('[data-material]').forEach(b=>b.onclick=()=>editor.updateRoom(selectedId,{color:b.dataset.material}));
-function setTool(tool){if(currentView==='3d'||editor.view==='loading3d')setView('2d');activeTool=tool;$('.studio').dataset.tool=tool;editor.setTool(tool);document.querySelectorAll('[data-tool]').forEach(b=>b.classList.toggle('active',b.dataset.tool===tool));$('#canvas-hint').innerHTML=icon(tool==='select'?'cursor':tool==='pan'?'hand':tool)+({select:'Klikk på et rom for å tilpasse. Dra i tomt område for å panorere',pan:'Dra for å flytte tegningen. Rull for å zoome',room:'Dra fra ett hjørne til et annet for å tegne rommet',wall:'Klikk for å tegne skillevegger etter hverandre. Esc avslutter',door:'Klikk på en vegg for å plassere en dør',window:'Klikk på en yttervegg for å plassere et vindu'}[tool]||'Klikk i plantegningen');}
+function setTool(tool){if(currentView==='3d'||editor.view==='loading3d')setView('2d');activeTool=tool;$('.studio').dataset.tool=tool;editor.setTool(tool);document.querySelectorAll('[data-tool]').forEach(b=>b.classList.toggle('active',b.dataset.tool===tool));$('#canvas-hint').innerHTML=icon(tool==='select'?'cursor':tool==='pan'?'hand':tool)+({select:'Klikk på et rom eller en vegg for å tilpasse. Dra i tomt område for å panorere',pan:'Dra for å flytte tegningen. Rull for å zoome',room:'Dra fra ett hjørne til et annet for å tegne rommet',wall:'Klikk for å tegne skillevegger etter hverandre. Esc avslutter',door:'Klikk på en vegg for å plassere en dør',window:'Klikk på en yttervegg for å plassere et vindu'}[tool]||'Klikk i plantegningen');}
 document.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>{setTool(b.dataset.tool);if(compactWorkspace.matches)setWorkspacePanel('canvas');});
 document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{editor.addItem(b.dataset.add);if(compactWorkspace.matches)setWorkspacePanel('canvas');toast('Møbelet er lagt til. Dra det til ønsket plass.');});
 document.querySelectorAll('[data-tool-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-tool-tab]').forEach(x=>{x.classList.toggle('active',x===b);x.setAttribute('aria-selected',x===b);});$('#build-tools').classList.toggle('hidden',b.dataset.toolTab!=='build');$('#interior-tools').classList.toggle('hidden',b.dataset.toolTab!=='interior');setTool('select');});
