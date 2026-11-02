@@ -14,6 +14,11 @@ const eslintConfig = defineConfig([
     "work/**",
   ]),
   {
+    // vinext 1.0.0-beta.5's <Link> fails to navigate in production builds (RSC prefetch
+    // error), so the public pages use plain <a> links with full page loads.
+    rules: { "@next/next/no-html-link-for-pages": "off" },
+  },
+  {
     files: ["components/ui/**/*.{ts,tsx}", "hooks/use-mobile.ts"],
     rules: {
       // These files are vendored verbatim from shadcn@4.17.0. Keep the
