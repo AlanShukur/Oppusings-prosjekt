@@ -59,7 +59,7 @@ All changes are in the working tree, not committed. 110 automated tests pass (74
 
 ## 3. Decisions only you can make, before Sprint 1
 
-1. **Sign-in and hosting.** Today only "Sign in with ChatGPT" on OpenAI Sites works, and ownership is keyed on the ChatGPT user ID (LB-1, LB-2). Most Norwegian homeowners won't have, or won't want to use, a ChatGPT account. *Recommendation:* keep the Cloudflare Worker, D1 and R2 stack. Add your own users table, use email magic-link sign-in at launch, and add Vipps Login next. Keep ChatGPT sign-in as an option.
+1. **Sign-in and hosting.** *Decided 2 November 2026: sign-in is removed for now.* The studio stores projects and files in the browser, using IndexedDB through `public/studio/local-store.js`, and never calls the server. The server code is kept, unused, for when accounts return. That later work is a users table, then email magic-link sign-in, then Vipps Login, plus a "move my projects to my account" import from the local store.
 2. **AI provider and data processing.** Floor plans and photos contain addresses and, in their EXIF data, GPS position (LB-5). Pick a provider with an EU data processing agreement and zero data retention, and decide whether users must opt in.
 3. **Legal.** Romly gives regulatory guidance to consumers. You need a privacy policy, terms of use and a liability disclaimer, all reviewed by a Norwegian lawyer before public launch (LB-3). Company details must appear on the site.
 4. **Business model.** *Recommendation:* sketching and the check are free. Paid: AI interpretation, the drawing and PDF package, and hand-off to an architect or structural engineer (RIB). B2B for contractors comes later.
@@ -67,12 +67,21 @@ All changes are in the working tree, not committed. 110 automated tests pass (74
 ## 4. Sprints
 
 ### Sprint 1 (9–20 Nov): launch foundations
-- Users table with migration from `owner_id`, email sign-in, account page with export and delete of all data (LB-2, LB-4, API-6).
-- Privacy policy, terms and liability pages linked from the footer and the check. Strip EXIF on upload (LB-3, LB-5).
-- Staging and production environments, nightly D1 export and an R2 backup policy, and a tested restore (LB-9).
-- Error monitoring and privacy-friendly analytics. Rate limiting on every write (LB-7, API-5, LB-6).
-- A landing page at `/` that explains the product and starts the demo without a login popup (LB-10).
-- *Acceptance:* a new user signs up with email, creates, exports and deletes a project on staging, and a restore drill succeeds.
+Done on branch `sprint-1-local-first` (2 Nov):
+- Sign-in removed. Projects and files are stored on the device, with the same revision, limit and file-sniffing rules as the server.
+- Full backup and restore, "Delete all data" behind a confirmation, and storage usage shown to the user. This covers export and delete of all data (LB-4, API-6) for as long as there are no accounts.
+- A landing page at `/`, with no login popup (LB-10).
+- Draft privacy and terms pages, linked from the landing page and the studio footer (LB-3). They still need company details, the hosting provider's name and a legal review.
+- Verified by 119 tests, a production build, and 36 browser checks. One of the checks confirms the studio makes no requests to `/api`.
+
+No longer needed while data stays on the device: EXIF stripping (photos never leave the device), server rate limiting, and D1/R2 backups. They come back with accounts.
+
+Remaining:
+- Staging and production environments.
+- Error monitoring that collects no personal data.
+- Optionally, privacy-friendly analytics. The privacy page must be updated first.
+- Fill in the company details and get the legal review.
+- *Acceptance:* a new user can use Romly from the landing page with no account, take a backup, delete everything, and restore from the backup.
 
 ### Sprint 2: plan model v2 and sandbox quality
 - `plan.schemaVersion` and migrations (M-1, API-1).
@@ -128,5 +137,5 @@ All changes are in the working tree, not committed. 110 automated tests pass (74
 | Users read the check as approval | "Veiledende" framing everywhere, no "godkjent", sources on every result, legal review |
 | TEK17 guidance changes | Versioned ruleset, check date on every rule, reports tied to their ruleset |
 | AI interpretation is inaccurate on real plans | Human correction step, evaluation set, confidence shown to the user |
-| ChatGPT-only sign-in limits reach | Own users table and email/Vipps sign-in in Sprint 1 |
+| Projects are lost when browser data is cleared (no accounts yet) | Backup and restore, persistent-storage request, clear warnings in the storage dialog and the terms; accounts later |
 | Personal data in plans and photos | EXIF stripping, data processing agreement, data export and delete |
