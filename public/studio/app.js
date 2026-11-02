@@ -1,7 +1,10 @@
 import { PlanEditor, upgradeExamplePlan } from './plan.js';
-import { api, ProjectSync, isRevisionConflict } from './cloud.js';
+import { ProjectSync, isRevisionConflict } from './cloud.js';
+import { createLocalApi, LOCAL_USER } from './local-store.js';
 import { openFloorplanFile, calibrateReference } from './reference-loader.js';
 import { evaluatePlan, STATUS_LABELS, DISCLAIMER, RULESET } from './tek17-check.js';
+import { installErrorReporting, reportProblem } from './error-reporter.js';
+installErrorReporting();
 
 const paths={
 brand:'<path d="m4 10 8-7 8 7v10h-6v-7h-4v7H4z"/><path d="M9 6V3"/>',
@@ -51,10 +54,11 @@ const decimal=value=>{const text=String(value??'').trim().replace(/\s/g,'').repl
 // The server rejects control characters in single-line fields, so they never reach a save.
 const singleLine=value=>String(value??'').replace(/[\u0000-\u001f\u007f]/g,' ');
 const multiLine=value=>String(value??'').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g,'');
-let session={user:null,signInUrl:'/signin-with-chatgpt?return_to=%2F',signOutUrl:'/signout-with-chatgpt?return_to=%2F'};
-let activeRecord=null, projectList=[], loadingProject=false, transitioning=false, filesBusy=0, fileMutation=0, sessionReady=false, lastSaveStatus={state:'loading',message:'Kobler til kontoen …'}, projectDialogGeneration=0;
+const api=createLocalApi();
+const session={user:LOCAL_USER};
+let activeRecord=null, projectList=[], loadingProject=false, transitioning=false, filesBusy=0, fileMutation=0, sessionReady=false, lastSaveStatus={state:'loading',message:'Åpner lagringen …'}, projectDialogGeneration=0;
 let referenceFailedKey='',referenceAssetKey='',referenceObjectURL=null,referenceGeneration=0,dialogCleanup=null,importingPlan=false,viewGeneration=0;
-const sync=new ProjectSync(renderSaveStatus);
+const sync=new ProjectSync(renderSaveStatus,{client:api,where:'på denne enheten'});
 const compactWorkspace=window.matchMedia('(max-width: 900px)');
 function setWorkspacePanel(panel){
   if(!['canvas','tools','properties'].includes(panel))return;
@@ -110,7 +114,7 @@ function selectRoom(r){
   for(const el of document.querySelectorAll('#room-name,#room-width,#room-height,#room-type,[data-material],#rename-room,#room-ceiling,#room-previous-use'))el.disabled=!r;
   document.querySelectorAll('.material').forEach(b=>b.classList.toggle('active',b.dataset.material===r?.color));renderRooms();
 }
-editor=new PlanEditor($('#floorplan'),{onSelect:selectRoom,onChange:state=>persist(state),onViewError:error=>{setView('2d');toast(error.message||'3D ble avbrutt. Tegningen er åpnet i 2D.');},onNotice:toast,onItemSelect:showItem,onZoom:value=>{zoom=value;$('#zoom-value').textContent=value+' %';}});
+editor=new PlanEditor($('#floorplan'),{onSelect:selectRoom,onChange:state=>persist(state),onViewError:error=>{reportProblem(error,{context:'3d'});setView('2d');toast(error.message||'3D ble avbrutt. Tegningen er åpnet i 2D.');},onNotice:toast,onItemSelect:showItem,onZoom:value=>{zoom=value;$('#zoom-value').textContent=value+' %';}});
 const initialPlan=editor.getState();
 function renderProject(){$('#project-title').textContent=project.name;$('#breadcrumb-title').textContent=project.name;$('#variant-name').textContent=editor?.getState().variant==='custom'?'Egen':project.variant;$('.prototype-label').textContent=activeRecord?'Tidlig produktversjon · Ditt prosjekt':'Eksempelvisning · Ikke lagret';}
 renderProject();selectRoom(rooms().find(r=>r.id===selectedId)||rooms()[0]);
@@ -202,7 +206,7 @@ async function resolveReferenceImage(plan=editor.getState()){
 }
 
 function choosePlanFile(){
-  if(!session.user){openAccount();return;}
+  if(!session.user){openStorage();return;}
   if(filesBusy||transitioning||importingPlan){toast('Vent til den pågående filhandlingen er ferdig.');return;}
   $('#plan-file-input').click();
 }
@@ -214,7 +218,7 @@ $('#plan-file-input').onchange=async event=>{
   try{
     if(!activeRecord)await createCloudProject({name:file.name.replace(/\.[^.]+$/,'').slice(0,70)||'Min plantegning',municipality:'',bedrooms:2,bathrooms:1,wishes:'',variant:'01'},{rooms:[],items:[],variant:'custom'});
     importingPlan=true;filesBusy++;fileMutation++;
-    openDialog('Importerer plantegningen','Filen lagres på kontoen før du setter målestokk.',`<p class="cloud-loading">Laster opp ${esc(file.name)} …</p>`);
+    openDialog('Importerer plantegningen','Filen lagres på denne enheten før du setter målestokk.',`<p class="cloud-loading">Laster opp ${esc(file.name)} …</p>`);
     const result=await api.upload(activeRecord.id,file);uploads.push(result.file);
     filesBusy--;importingPlan=false;
     await openPlanImport(result.file);
@@ -296,7 +300,7 @@ function uploadList(){
     const ready=!file.status||file.status==='ready';
     const pending=file.status==='pending';
     const canDelete=file.canDelete!==false;
-    const message=ready?`${fmt(file.size/1024)} kB · Lagret på kontoen`:pending?(canDelete?'Opplastingen ble avbrutt. Fjern filen og prøv igjen.':'Opplasting pågår. Åpne grunnlaget igjen for oppdatert status.'):'Slettingen ble avbrutt. Prøv å fjerne filen igjen.';
+    const message=ready?`${fmt(file.size/1024)} kB · Lagret på denne enheten`:pending?(canDelete?'Opplastingen ble avbrutt. Fjern filen og prøv igjen.':'Opplasting pågår. Åpne grunnlaget igjen for oppdatert status.'):'Slettingen ble avbrutt. Prøv å fjerne filen igjen.';
     return`<div class="upload-item">${ready&&file.mimeType?.startsWith('image/')?`<img class="upload-thumb" loading="lazy" decoding="async" src="${esc(file.url)}" alt="Forhåndsvisning av ${esc(file.name)}">`:`<span class="upload-thumb">${icon('file')}</span>`}<div><strong>${esc(file.name)}</strong><small>${message}</small>${ready?`<button class="use-floorplan" data-use-plan="${esc(file.id)}">${icon('layers')} Bruk i tegningen</button><a class="text-link" href="${esc(file.url)}" target="_blank" rel="noopener noreferrer">Åpne fil ↗</a>`:''}</div><button class="icon-button" data-remove-file="${esc(file.id)}" aria-label="${ready?'Fjern':'Prøv å fjerne'} ${esc(file.name)}" ${canDelete?'':'disabled'}>${icon('close')}</button></div>`;
   }).join('');
 }
@@ -321,12 +325,12 @@ async function acceptFiles(files){
     if(!['image/jpeg','image/png','image/webp','application/pdf'].includes(file.type)||file.size>20*1024*1024||file.size===0||uploads.length>=12){toast('Bruk JPG, PNG, WebP eller PDF, maks. 20 MB per fil og 12 filer per prosjekt.');continue;}
     try{const result=await api.upload(id,file);if(activeRecord?.id===id){uploads=uploads.filter(item=>item.id!==result.file.id);uploads.push(result.file);added++;refreshUploadList();}}catch(error){toast(error.message);}
   }}finally{filesBusy--;refreshUploadList();}
-  if(added)toast(`${added===1?'Filen er':added+' filer er'} lastet opp og lagret på kontoen.`);
+  if(added)toast(`${added===1?'Filen er':added+' filer er'} lastet opp og lagret på denne enheten.`);
 }
 $('#file-input').onchange=e=>{acceptFiles(e.target.files);e.target.value='';};
 function openGround(){
   if(!activeRecord){openProjects();return;}
-  openDialog('La oss bli kjent med hjemmet ditt','Prosjektdetaljer og filer følger kontoen din.',`<div class="form-grid"><label class="field">Prosjektnavn<input id="project-name-field" class="input" maxlength="70" value="${esc(project.name)}"></label><label class="field">Kommune<input id="municipality-field" class="input" maxlength="70" value="${esc(project.municipality)}" placeholder="Skriv kommunen din"></label></div><div id="dropzone" class="dropzone" role="button" tabindex="0">${icon('upload')}<strong>Dra inn plantegning eller bilder</strong><span>eller <u>velg filer fra enheten</u></span><small>JPG, PNG, WebP eller PDF · Maks. 20 MB per fil · 12 filer per prosjekt</small></div><div id="file-upload-progress" class="file-upload-progress" role="status"></div><div id="upload-list" class="upload-list">${uploadList()}</div><div class="info-banner">${icon('info')}<p>Filene lagres privat på kontoen din og kan åpnes på andre enheter. Velg «Bruk i tegningen» på en fil for å sette målestokk og tegne egne rom. Automatisk AI-tolkning er ikke tilkoblet.</p></div>`,`<button class="button secondary" id="ground-cancel">Tilbake til studio</button><button class="button primary" id="ground-next">Videre til dine ønsker ${icon('arrow-right')}</button>`);
+  openDialog('La oss bli kjent med hjemmet ditt','Prosjektdetaljer og filer lagres på denne enheten.',`<div class="form-grid"><label class="field">Prosjektnavn<input id="project-name-field" class="input" maxlength="70" value="${esc(project.name)}"></label><label class="field">Kommune<input id="municipality-field" class="input" maxlength="70" value="${esc(project.municipality)}" placeholder="Skriv kommunen din"></label></div><div id="dropzone" class="dropzone" role="button" tabindex="0">${icon('upload')}<strong>Dra inn plantegning eller bilder</strong><span>eller <u>velg filer fra enheten</u></span><small>JPG, PNG, WebP eller PDF · Maks. 20 MB per fil · 12 filer per prosjekt</small></div><div id="file-upload-progress" class="file-upload-progress" role="status"></div><div id="upload-list" class="upload-list">${uploadList()}</div><div class="info-banner">${icon('info')}<p>Filene lagres bare i denne nettleseren og sendes ikke til noen server. Velg «Bruk i tegningen» på en fil for å sette målestokk og tegne egne rom. Automatisk AI-tolkning er ikke tilkoblet.</p></div>`,`<button class="button secondary" id="ground-cancel">Tilbake til studio</button><button class="button primary" id="ground-next">Videre til dine ønsker ${icon('arrow-right')}</button>`);
   bindUploads();refreshUploadList();
   const currentId=activeRecord.id;const currentFileMutation=fileMutation;
   api.files(currentId).then(result=>{if(activeRecord?.id===currentId&&!filesBusy&&fileMutation===currentFileMutation){uploads=result.files||[];refreshUploadList();}}).catch(error=>toast(error.message));
@@ -418,20 +422,19 @@ function openExport(){
   $('#export-svg').onclick=()=>{download('romly-plantegning.svg',editor.exportSVG(),'image/svg+xml');toast('Plantegningen er lastet ned.');};
   $('#export-brief').onclick=downloadReport;$('#export-json').onclick=downloadProjectBackup;
   $('#import-json').onclick=()=>{
-    if(!session.user){openAccount();return;}
     const input=document.createElement('input');input.type='file';input.accept='.json,application/json';
-    input.onchange=async()=>{if(!input.files[0])return;try{if(input.files[0].size>256*1024)throw new Error('Prosjektfilen er for stor. Maks. 256 kB.');const data=validateProjectImport(JSON.parse(await input.files[0].text()));if(!await ensureCanLeave())return;openImportProject(data);}catch(error){toast(error.message||'Filen er ikke et gyldig Romly-prosjekt.');}};
+    // Accepts a single project file (romly-v1) or a full backup from «Lagring på denne enheten» (romly-backup-v1).
+    input.onchange=async()=>{if(!input.files[0])return;try{if(input.files[0].size>10*1024*1024)throw new Error('Filen er for stor. Maks. 10 MB.');const raw=JSON.parse(await input.files[0].text());if(raw?.format==='romly-backup-v1'&&Array.isArray(raw.projects)){await restoreBackup(raw);return;}const data=validateProjectImport(raw);if(!await ensureCanLeave())return;openImportProject(data);}catch(error){toast(error.message||'Filen er ikke et gyldig Romly-prosjekt.');}};
     input.click();
   };
 }
 function openImportProject(data){
-  openDialog('Importer prosjektet til kontoen','Tegningen opprettes som et nytt prosjekt.',`<label class="field">Prosjektnavn<input class="input" id="import-project-name" maxlength="70" value="${esc(data.project.name)}"></label><div class="info-banner">${icon('info')}<p>Eksisterende prosjekter beholdes. Prosjektfilen inneholder tegning og ønsker; eventuelle bilder og PDF-er må lastes opp separat.</p></div><p class="project-message error" id="import-project-error" hidden></p>`,`<button class="button secondary" id="import-project-cancel">Avbryt</button><button class="button primary" id="import-project-submit">${icon('upload')} Importer til kontoen</button>`);
+  openDialog('Importer prosjektet','Tegningen opprettes som et nytt prosjekt.',`<label class="field">Prosjektnavn<input class="input" id="import-project-name" maxlength="70" value="${esc(data.project.name)}"></label><div class="info-banner">${icon('info')}<p>Eksisterende prosjekter beholdes. Prosjektfilen inneholder tegning og ønsker; eventuelle bilder og PDF-er må lastes opp separat.</p></div><p class="project-message error" id="import-project-error" hidden></p>`,`<button class="button secondary" id="import-project-cancel">Avbryt</button><button class="button primary" id="import-project-submit">${icon('upload')} Importer</button>`);
   $('#import-project-cancel').onclick=closeDialog;
-  $('#import-project-submit').onclick=async e=>{const button=e.currentTarget;const name=singleLine($('#import-project-name').value).trim();if(!name){$('#import-project-name').focus();return;}button.disabled=true;try{await createCloudProject({...data.project,name},data.plan);toast('Prosjektfilen er importert og lagret på kontoen.');}catch(error){button.disabled=false;if($('#import-project-error')){$('#import-project-error').hidden=false;$('#import-project-error').textContent=error.message;}}};
+  $('#import-project-submit').onclick=async e=>{const button=e.currentTarget;const name=singleLine($('#import-project-name').value).trim();if(!name){$('#import-project-name').focus();return;}button.disabled=true;try{await createCloudProject({...data.project,name},data.plan);toast('Prosjektfilen er importert.');}catch(error){button.disabled=false;if($('#import-project-error')){$('#import-project-error').hidden=false;$('#import-project-error').textContent=error.message;}}};
 }
 function openAddRoomDialog(){openDialog('Gi plass til et nytt rom','Legg til et rom i skissen. Plassering og tilkomst må vurderes.',`<label class="field">Romnavn<input class="input" id="new-room-name" value="Nytt soverom" maxlength="40"></label><div class="info-banner">${icon('info')}<p>Det nye rommet opprettes som en skissesone. Juster størrelse og kontroller at det passer i planløsningen.</p></div>`,`<button class="button secondary" id="cancel-room">Avbryt</button><button class="button primary" id="confirm-room">${icon('plus')} Legg til rom</button>`);$('#cancel-room').onclick=closeDialog;$('#confirm-room').onclick=()=>{const name=singleLine($('#new-room-name').value).trim()||'Nytt rom';editor.addItem('room');const last=rooms().at(-1);if(last){editor.updateRoom(last.id,{name});editor.selectRoom(last.id);}closeDialog();toast('Rommet er lagt til som en skissesone.');};}
-function openHelp(){openDialog('Fra plantegning til egne rom','Slik bruker du din egen bolig som utgangspunkt.',`<div class="help-steps">${[['1','Importer plantegningen','Velg Importer plantegning fra Mine prosjekter eller verktøypanelet. Bruk JPG, PNG, WebP eller PDF, og velg riktig side i en flersidig PDF.'],['2','Sett målestokken','Marker to punkter med en kjent avstand, skriv inn avstanden i meter og bruk tegningen som underlag. Du kan også utforske en av eksempelplanene.'],['3','Tegn og utforsk i 3D','Dra fra hjørne til hjørne for å tegne rom oppå underlaget. Tilpass romtype, mål, materialer, dører og vinduer. Åpne 3D for å rotere, zoome og se veggene.'],['4','Forbered neste steg','Bruk sjekklisten og eksporter en prosjektbrief til dialog med fagfolk.']].map(([n,t,p])=>`<article class="help-step"><span class="step-number">${n}</span><div><h3>${t}</h3><p>${p}</p></div></article>`).join('')}</div><div class="notice">${icon('info')}<p>Prosjekter og opplastede filer lagres privat på kontoen. Importerte plantegninger tegnes opp manuelt; AI-tolkning og kommunale oppslag er ikke koblet til ennå. Eksempelvisningen lagres ikke automatisk.</p></div>`);}
-function initials(name){return String(name||'').split(/[\s@._-]+/).filter(Boolean).slice(0,2).map(s=>s[0]).join('').toUpperCase()||'R';}
+function openHelp(){openDialog('Fra plantegning til egne rom','Slik bruker du din egen bolig som utgangspunkt.',`<div class="help-steps">${[['1','Importer plantegningen','Velg Importer plantegning fra Mine prosjekter eller verktøypanelet. Bruk JPG, PNG, WebP eller PDF, og velg riktig side i en flersidig PDF.'],['2','Sett målestokken','Marker to punkter med en kjent avstand, skriv inn avstanden i meter og bruk tegningen som underlag. Du kan også utforske en av eksempelplanene.'],['3','Tegn og utforsk i 3D','Dra fra hjørne til hjørne for å tegne rom oppå underlaget. Tilpass romtype, mål, materialer, dører og vinduer. Åpne 3D for å rotere, zoome og se veggene.'],['4','Forbered neste steg','Bruk sjekklisten og eksporter en prosjektbrief til dialog med fagfolk.']].map(([n,t,p])=>`<article class="help-step"><span class="step-number">${n}</span><div><h3>${t}</h3><p>${p}</p></div></article>`).join('')}</div><div class="notice">${icon('info')}<p>Prosjekter og opplastede filer lagres bare i denne nettleseren. Importerte plantegninger tegnes opp manuelt; AI-tolkning og kommunale oppslag er ikke koblet til ennå. Eksempelvisningen lagres ikke automatisk.</p></div>`);}
 function renderSaveStatus(status){
   lastSaveStatus=status;
   const element=$('#save-status');
@@ -494,7 +497,7 @@ async function openCloudProject(id){
   return withProjectTransition(async()=>{const result=await api.get(id);await applyCloudRecord(result.project,{files:result.files});});
 }
 async function createCloudProject(data,plan,{flush=true}={}){
-  if(!session.user){openAccount();return;}
+  if(!session.user){openStorage();return;}
   return withProjectTransition(async()=>{
     const newPlan=clone(plan);delete newPlan.reference;
     const result=await api.create({project:clone(data),plan:newPlan});
@@ -503,7 +506,7 @@ async function createCloudProject(data,plan,{flush=true}={}){
   },{flush});
 }
 function openRecovery(recovery){
-  openDialog('Endringer venter på denne enheten','Et tidligere lagringsforsøk ble ikke bekreftet.',`<p class="account-note">Det finnes en lokal gjenopprettingskopi for dette prosjektet. Kontoversjonen er åpnet i studioet. Du kan hente tilbake de lokale endringene eller beholde kontoversjonen.</p><div class="info-banner">${icon('info')}<p>${recovery.revision===sync.record.revision?'Kontoversjonen har samme revisjon som sist du redigerte.':'Prosjektet på kontoen er endret i mellomtiden. Lagre de lokale endringene som et nytt prosjekt for å beholde begge versjonene.'}</p></div>`,`<button class="button secondary" id="discard-recovery">Behold kontoversjonen</button><button class="button primary" id="restore-recovery">${recovery.revision===sync.record.revision?'Hent tilbake endringer':'Lagre endringer som nytt prosjekt'}</button>`);
+  openDialog('Endringer venter på denne enheten','Et tidligere lagringsforsøk ble ikke bekreftet.',`<p class="account-note">Det finnes en lokal gjenopprettingskopi for dette prosjektet. Den lagrede versjonen er åpnet i studioet. Du kan hente tilbake endringene eller beholde den lagrede versjonen.</p><div class="info-banner">${icon('info')}<p>${recovery.revision===sync.record.revision?'Den lagrede versjonen har samme revisjon som sist du redigerte.':'Prosjektet er endret i en annen fane i mellomtiden. Lagre de lokale endringene som et nytt prosjekt for å beholde begge versjonene.'}</p></div>`,`<button class="button secondary" id="discard-recovery">Behold lagret versjon</button><button class="button primary" id="restore-recovery">${recovery.revision===sync.record.revision?'Hent tilbake endringer':'Lagre endringer som nytt prosjekt'}</button>`);
   $('#discard-recovery').onclick=()=>{sync.clearRecovery();closeDialog();};
   $('#restore-recovery').onclick=async e=>{const button=e.currentTarget;button.disabled=true;try{
     const data=validateProjectImport({format:'romly-v1',...recovery.data});
@@ -512,52 +515,70 @@ function openRecovery(recovery){
       loadingProject=true;try{project=clone(data.project);editor.loadState(upgradeExamplePlan(data.plan));renderProject();}finally{loadingProject=false;}
       persist();await sync.flush();closeDialog({force:true});
     },{flush:false});
-    toast('Endringene er hentet tilbake og lagret på kontoen.');
+    toast('Endringene er hentet tilbake og lagret.');
   }catch(error){button.disabled=false;toast(error.message||'Gjenopprettingskopien kunne ikke åpnes.');}};
 }
 function showSaveProblem(error=sync.error){
-  if(error?.status===401){
-    openDialog('Du er logget ut','Logg inn igjen for å lagre endringene på kontoen.',`<p class="account-note">Endringene dine er ikke lagret på kontoen ennå. ${storageAvailable?'En gjenopprettingskopi er lagret på denne enheten, og du får tilbud om å hente den tilbake etter innlogging.':'Last ned en kopi før du logger inn, siden lokal gjenoppretting er utilgjengelig.'}</p>`,`<button class="button secondary" id="signed-out-download">${icon('download')} Last ned kopi</button><a class="button primary" href="${esc(session.signInUrl)}" target="_top">Logg inn igjen ${icon('arrow-right')}</a>`);
-    $('#signed-out-download').onclick=downloadProjectBackup;return;
-  }
   const conflict=isRevisionConflict(error);
-  openDialog(conflict?'Prosjektet har en nyere kontoversjon':'Endringene er ikke lagret på kontoen',conflict?'Vi overskriver ikke endringer fra en annen økt.':'Behold en kopi mens du prøver å koble til igjen.',`<p class="account-note">${esc(error?.message||'Lagringen kunne ikke fullføres.')} De synlige endringene beholdes i studioet. ${storageAvailable?'En gjenopprettingskopi beholdes også på denne enheten.':'Lokal gjenoppretting er utilgjengelig. Last ned en kopi før du lukker siden.'}</p><div class="conflict-actions"><button class="button secondary" id="problem-download">${icon('download')} Last ned de synlige endringene</button><button class="button secondary" id="problem-copy">${icon('plus')} Lagre som nytt prosjekt</button>${conflict?`<button class="button secondary" id="problem-reload">${icon('cloud')} Forkast lokale endringer og hent kontoversjonen</button>`:''}</div>`,`<button class="button secondary" id="problem-stay">Fortsett her</button>${conflict?'':`<button class="button primary" id="problem-retry">Prøv lagringen igjen</button>`}`);
+  openDialog(conflict?'Prosjektet er endret i en annen fane':'Endringene er ikke lagret',conflict?'Vi overskriver ikke endringer fra en annen økt.':'Behold en kopi mens du prøver igjen.',`<p class="account-note">${esc(error?.message||'Lagringen kunne ikke fullføres.')} De synlige endringene beholdes i studioet. ${storageAvailable?'En gjenopprettingskopi beholdes også på denne enheten.':'Lokal gjenoppretting er utilgjengelig. Last ned en kopi før du lukker siden.'}</p><div class="conflict-actions"><button class="button secondary" id="problem-download">${icon('download')} Last ned de synlige endringene</button><button class="button secondary" id="problem-copy">${icon('plus')} Lagre som nytt prosjekt</button>${conflict?`<button class="button secondary" id="problem-reload">${icon('cloud')} Forkast endringene her og hent den lagrede versjonen</button>`:''}</div>`,`<button class="button secondary" id="problem-stay">Fortsett her</button>${conflict?'':`<button class="button primary" id="problem-retry">Prøv lagringen igjen</button>`}`);
   $('#problem-download').onclick=downloadProjectBackup;
   $('#problem-stay').onclick=closeDialog;
   $('#problem-copy').onclick=async e=>{const button=e.currentTarget;button.disabled=true;const oldRecoveryKey=sync.recoveryKey;try{await createCloudProject({...project,name:(project.name+' – kopi').slice(0,70)},editor.getState(),{flush:false});removeRecoveryKey(oldRecoveryKey);toast('Endringene er lagret som et nytt prosjekt.');}catch(copyError){button.disabled=false;toast(copyError.message);}};
-  if($('#problem-retry'))$('#problem-retry').onclick=async e=>{const button=e.currentTarget;button.disabled=true;try{await sync.flush();closeDialog();toast('Endringene er lagret på kontoen.');}catch(retryError){button.disabled=false;if(isRevisionConflict(retryError)||retryError.status===401)showSaveProblem(retryError);else toast(retryError.message);}};
-  if($('#problem-reload'))$('#problem-reload').onclick=async e=>{const button=e.currentTarget;button.disabled=true;try{await withProjectTransition(async()=>{const result=await api.get(activeRecord.id);await applyCloudRecord(result.project,{checkRecovery:false});sync.clearRecovery();},{flush:false});toast('Kontoversjonen er åpnet.');}catch(loadError){button.disabled=false;toast(loadError.message);}};
+  if($('#problem-retry'))$('#problem-retry').onclick=async e=>{const button=e.currentTarget;button.disabled=true;try{await sync.flush();closeDialog();toast('Endringene er lagret.');}catch(retryError){button.disabled=false;if(isRevisionConflict(retryError)||retryError.status===401)showSaveProblem(retryError);else toast(retryError.message);}};
+  if($('#problem-reload'))$('#problem-reload').onclick=async e=>{const button=e.currentTarget;button.disabled=true;try{await withProjectTransition(async()=>{const result=await api.get(activeRecord.id);await applyCloudRecord(result.project,{checkRecovery:false});sync.clearRecovery();},{flush:false});toast('Den lagrede versjonen er åpnet.');}catch(loadError){button.disabled=false;toast(loadError.message);}};
 }
-function openAccount(){
-  if(!session.user){
-    openDialog('Ta med deg prosjektet videre','Logg inn for å lagre prosjekter og filer.',`<div class="project-empty">${icon('home')}<h3>Ditt hjem. Dine prosjekter.</h3><p>Med en konto kan du lagre flere prosjekter og åpne tegninger og bilder på andre enheter. Eksempelvisningen kan utforskes uten å opprette et prosjekt.</p><a class="button primary" href="${esc(session.signInUrl)}" target="_top">Logg inn med ChatGPT ${icon('arrow-right')}</a></div>${!sessionReady?'<p class="project-message error">Kontotjenesten kunne ikke lastes. Prøv å koble til igjen.</p>':''}`,`<button class="button secondary" id="account-demo">Utforsk eksempelvisningen</button><button class="button secondary" id="account-retry">Koble til igjen</button>`);
-    $('#account-demo').onclick=closeDialog;$('#account-retry').onclick=initializeCloud;return;
+function megabytes(bytes){const value=bytes/1024/1024;return value<0.1?'under 0,1 MB':fmt(value)+' MB';}
+function openStorage(){
+  if(!sessionReady){
+    openDialog('Lagring er ikke tilgjengelig','Nettleseren tillater ikke at Romly lagrer data.',`<p class="account-note">Dette skjer ofte i privat nettlesing eller når lagring av nettstedsdata er slått av. Du kan utforske eksempelboligen, men prosjekter og filer kan ikke lagres.</p>`,`<button class="button secondary" id="storage-retry">Prøv igjen</button><button class="button primary" id="storage-close">Utforsk eksempelet</button>`);
+    $('#storage-close').onclick=closeDialog;$('#storage-retry').onclick=initializeStorage;return;
   }
-  openDialog('Kontoen din','Prosjekter og filer er knyttet til innloggingen din.',`<div class="account-summary"><span>${esc(initials(session.user.name||session.user.email))}</span><div><h3>${esc(session.user.name||session.user.email)}</h3><p>${esc(session.user.email)}</p></div></div><p class="account-note">Bare kontoen din har tilgang til dine prosjekter i appen. Tilgangen til selve nettstedet følger eksisterende delingsinnstillinger.</p><div class="account-actions"><button class="button secondary" id="account-projects">${icon('home')} Mine prosjekter</button><a class="button secondary" id="account-signout" href="${esc(session.signOutUrl)}" target="_top">Logg ut</a></div>`, `<button class="button primary" id="account-close">Tilbake til studio</button>`);
-  $('#account-close').onclick=closeDialog;$('#account-projects').onclick=openProjects;
-  let signingOut=false;$('#account-signout').onclick=async e=>{if(signingOut)return;e.preventDefault();if(!await ensureCanLeave())return;signingOut=true;$('#account-signout')?.click();};
+  openDialog('Lagring på denne enheten','Ingen konto. Prosjektene dine blir i denne nettleseren.',`<div class="project-empty">${icon('shield')}<h3>Dataene dine forlater ikke enheten</h3><p>Tegninger, ønsker og filer du laster opp lagres bare i denne nettleseren og sendes ikke til noen server. Bytter du enhet eller nettleser, eller sletter nettleserdata, er prosjektene ikke med. Last ned en sikkerhetskopi jevnlig.</p></div><p class="account-note" id="storage-usage">Beregner lagringsplass …</p><div class="account-actions"><button class="button secondary" id="storage-export">${icon('download')} Last ned sikkerhetskopi</button><button class="button secondary" id="storage-projects">${icon('home')} Mine prosjekter</button><button class="button secondary" id="storage-delete">${icon('trash')} Slett alle data</button></div><p class="project-message error" id="storage-delete-warning" role="alert" hidden>Alle prosjekter og opplastede filer på denne enheten slettes for godt. Last ned en sikkerhetskopi først hvis du vil beholde dem.</p>`,`<button class="button primary" id="storage-close">Tilbake til studio</button>`);
+  $('#storage-close').onclick=closeDialog;$('#storage-projects').onclick=()=>openProjects();
+  api.usage().then(usage=>{if(!$('#storage-usage'))return;$('#storage-usage').textContent=usage.used===null?'Nettleseren oppgir ikke hvor mye plass som er brukt.':`Brukt: ${megabytes(usage.used)}${usage.quota?` av omtrent ${megabytes(usage.quota)} tilgjengelig`:''}. ${usage.persisted?'Nettleseren har lovet å ikke slette dataene ved plassmangel.':'Nettleseren kan slette dataene hvis enheten går tom for plass.'}`;});
+  $('#storage-export').onclick=async()=>{try{await sync.flush().catch(()=>{});download(`romly-sikkerhetskopi-${new Date().toISOString().slice(0,10)}.json`,JSON.stringify(await api.exportAll(),null,2),'application/json');toast('Sikkerhetskopien er lastet ned. Opplastede filer er ikke med.');}catch(error){toast(error.message);}};
+  let confirmDelete=false;
+  $('#storage-delete').onclick=async e=>{
+    if(!confirmDelete){confirmDelete=true;$('#storage-delete-warning').hidden=false;e.currentTarget.innerHTML=`${icon('trash')} Ja, slett alt`;e.currentTarget.classList.add('danger');return;}
+    const button=e.currentTarget;button.disabled=true;
+    try{
+      await sync.flush().catch(()=>{});
+      await withProjectTransition(async()=>{
+        await api.deleteAll();sync.clearRecovery();activeRecord=null;sync.activate(null);uploads=[];rememberProject(null);releaseReferenceAsset();
+        try{for(const key of Object.keys(localStorage))if(key.startsWith('romly-recovery:'))localStorage.removeItem(key);}catch{}
+        loadingProject=true;try{project={name:'Eksempelbolig',municipality:'',bedrooms:2,bathrooms:1,wishes:'',variant:'01'};editor.loadState(initialPlan);renderProject();}finally{loadingProject=false;}
+      },{flush:false});
+      toast('Alle data på denne enheten er slettet.');openProjects([]);
+    }catch(error){button.disabled=false;toast(error.message);}
+  };
+}
+async function restoreBackup(data){
+  const projects=data.projects.map(entry=>validateProjectImport({format:'romly-v1',project:entry.project,plan:entry.plan}));
+  if(!await ensureCanLeave())return;
+  let restored=0;for(const entry of projects){try{await api.create({project:entry.project,plan:entry.plan});restored++;}catch(error){toast(error.message);break;}}
+  toast(`${restored} av ${projects.length} prosjekter er hentet inn fra sikkerhetskopien.`);openProjects();
 }
 function openCreateProject(){
-  if(!session.user){openAccount();return;}
-  openDialog('Gi prosjektet ditt en start','Opprett et privat prosjekt på kontoen din.',`<label class="field">Prosjektnavn<input id="create-project-name" class="input" maxlength="70" placeholder="For eksempel Leiligheten vår" value="Mitt oppussingsprosjekt"></label><label class="field">Kommune<input id="create-project-municipality" class="input" maxlength="70" placeholder="Skriv kommunen din"></label><div class="project-create-template">${miniPlan('01')}<div><strong>Starter med en eksempelplan</strong><p>En redigerbar bolig på 89,4 m². Opplastede tegninger tolkes ikke automatisk ennå.</p></div></div><p class="project-form-note">Du kan lagre egne bilder, tegninger og ønsker i prosjektet. Eksempelplanen er et skissegrunnlag som kan tilpasses.</p><p id="create-project-error" class="project-message error" hidden></p>`,`<button class="button secondary" id="create-project-back">Tilbake</button><button class="button primary" id="create-project-submit">${icon('plus')} Opprett prosjekt</button>`);
+  if(!session.user){openStorage();return;}
+  openDialog('Gi prosjektet ditt en start','Prosjektet lagres på denne enheten.',`<label class="field">Prosjektnavn<input id="create-project-name" class="input" maxlength="70" placeholder="For eksempel Leiligheten vår" value="Mitt oppussingsprosjekt"></label><label class="field">Kommune<input id="create-project-municipality" class="input" maxlength="70" placeholder="Skriv kommunen din"></label><div class="project-create-template">${miniPlan('01')}<div><strong>Starter med en eksempelplan</strong><p>En redigerbar bolig på 89,4 m². Opplastede tegninger tolkes ikke automatisk ennå.</p></div></div><p class="project-form-note">Du kan lagre egne bilder, tegninger og ønsker i prosjektet. Eksempelplanen er et skissegrunnlag som kan tilpasses.</p><p id="create-project-error" class="project-message error" hidden></p>`,`<button class="button secondary" id="create-project-back">Tilbake</button><button class="button primary" id="create-project-submit">${icon('plus')} Opprett prosjekt</button>`);
   $('#create-project-back').onclick=openProjects;
   $('#create-project-submit').onclick=async e=>{const button=e.currentTarget;const name=singleLine($('#create-project-name').value).trim();if(!name){$('#create-project-name').focus();return;}const municipality=singleLine($('#create-project-municipality').value).trim();if(!await ensureCanLeave())return;button.disabled=true;
-    try{await createCloudProject({name,municipality,bedrooms:2,bathrooms:1,wishes:'',variant:'01'},initialPlan);toast('Prosjektet er opprettet og lagret på kontoen.');openGround();}
+    try{await createCloudProject({name,municipality,bedrooms:2,bathrooms:1,wishes:'',variant:'01'},initialPlan);toast('Prosjektet er opprettet.');openGround();}
     catch(error){button.disabled=false;if($('#create-project-error')){$('#create-project-error').hidden=false;$('#create-project-error').textContent=error.message;}else toast(error.message);}
   };
 }
 function projectListMarkup(){
-  if(!projectList.length)return`<div class="project-empty">${icon('home')}<h3>Gi plass til ditt første prosjekt</h3><p>Samle plantegninger, bilder og ideer på ett sted. Prosjektene lagres på kontoen din og kan åpnes på andre enheter.</p><button class="button primary" id="first-project-btn">${icon('plus')} Opprett ditt første prosjekt</button></div>`;
+  if(!projectList.length)return`<div class="project-empty">${icon('home')}<h3>Gi plass til ditt første prosjekt</h3><p>Samle plantegninger, bilder og ideer på ett sted. Prosjektene lagres i denne nettleseren.</p><button class="button primary" id="first-project-btn">${icon('plus')} Opprett ditt første prosjekt</button></div>`;
   return projectList.map(record=>`<article class="cloud-project-row ${record.id===activeRecord?.id?'current':''}"><button class="cloud-project-open" data-open-project="${esc(record.id)}">${miniPlan(record.project.variant)}<div>${record.status==='deleting'?'<span class="status-pill">SLETTING MÅ FULLFØRES</span>':record.id===activeRecord?.id?'<span class="status-pill">ÅPENT PROSJEKT</span>':''}<h3>${esc(record.project.name)}</h3><p>${esc(record.project.municipality||'Kommune ikke valgt')} · ${record.roomCount} rom · ${fmt(record.area)} m² · ${record.fileCount} filer</p><small>Sist endret ${esc(new Date(record.updatedAt).toLocaleString('nb-NO',{dateStyle:'short',timeStyle:'short'}))}</small></div></button><button class="cloud-project-delete" data-delete-project="${esc(record.id)}" aria-label="Slett ${esc(record.project.name)}" title="Slett prosjekt">${icon('trash')}</button></article>`).join('');
 }
 async function openProjects(preloaded){
-  if(!session.user){openAccount();return;}
+  if(!session.user){openStorage();return;}
   const generation=++projectDialogGeneration;
-  openDialog('Mine prosjekter','Planer, bilder og muligheter – samlet på kontoen din.',`<div class="projects-heading"><p>Prosjektene er private for kontoen din.</p><button class="button secondary" id="projects-import-plan">Importer plantegning</button><button class="button primary" id="new-cloud-project">${icon('plus')} Nytt prosjekt</button></div><div id="cloud-projects-list" class="cloud-projects-list"><p class="cloud-loading">Henter prosjektene dine …</p></div>${legacyAvailable()?`<div class="project-migration"><div><strong>Du har et lokalt prosjekt fra prototypen</strong><p>Velg selv om tegningen og ønskene skal kopieres til kontoen. Den opprinnelige lokale kopien beholdes.</p></div><button class="button secondary" id="migrate-local-project">Flytt til kontoen ${icon('arrow-right')}</button></div>`:''}`,activeRecord?`<button class="button secondary" id="projects-return">Tilbake til studio</button><button class="button secondary" id="projects-details">${icon('edit')} Prosjektdetaljer</button>`:'',true);
+  openDialog('Mine prosjekter','Planer, bilder og muligheter – samlet på denne enheten.',`<div class="projects-heading"><p>Prosjektene lagres bare i denne nettleseren.</p><button class="button secondary" id="projects-import-plan">Importer plantegning</button><button class="button primary" id="new-cloud-project">${icon('plus')} Nytt prosjekt</button></div><div id="cloud-projects-list" class="cloud-projects-list"><p class="cloud-loading">Henter prosjektene dine …</p></div>${legacyAvailable()?`<div class="project-migration"><div><strong>Du har et lokalt prosjekt fra prototypen</strong><p>Velg selv om tegningen og ønskene skal kopieres til et nytt prosjekt. Den opprinnelige lokale kopien beholdes.</p></div><button class="button secondary" id="migrate-local-project">Gjør om til prosjekt ${icon('arrow-right')}</button></div>`:''}`,activeRecord?`<button class="button secondary" id="projects-return">Tilbake til studio</button><button class="button secondary" id="projects-details">${icon('edit')} Prosjektdetaljer</button>`:'',true);
   $('#new-cloud-project').onclick=openCreateProject;
   $('#projects-import-plan').onclick=choosePlanFile;
   if($('#projects-return'))$('#projects-return').onclick=closeDialog;if($('#projects-details'))$('#projects-details').onclick=openGround;
-  if($('#migrate-local-project'))$('#migrate-local-project').onclick=async e=>{const button=e.currentTarget;if(!await ensureCanLeave())return;button.disabled=true;try{const data=validateProjectImport({format:'romly-v1',...stored});await createCloudProject(data.project,data.plan);try{localStorage.setItem('romly-legacy-imported:'+session.user.id,'1');}catch{}toast('Det lokale prosjektet er kopiert til kontoen.');}catch(error){button.disabled=false;toast(error.message||'Det lokale prosjektet kunne ikke importeres.');}};
+  if($('#migrate-local-project'))$('#migrate-local-project').onclick=async e=>{const button=e.currentTarget;if(!await ensureCanLeave())return;button.disabled=true;try{const data=validateProjectImport({format:'romly-v1',...stored});await createCloudProject(data.project,data.plan);try{localStorage.setItem('romly-legacy-imported:'+session.user.id,'1');}catch{}toast('Det lokale prosjektet er kopiert til et nytt prosjekt.');}catch(error){button.disabled=false;toast(error.message||'Det lokale prosjektet kunne ikke importeres.');}};
   try{
     const result=Array.isArray(preloaded)?{projects:preloaded}:await api.list();if(generation!==projectDialogGeneration||!$('#cloud-projects-list'))return;
     projectList=result.projects||[];$('#cloud-projects-list').innerHTML=projectListMarkup();
@@ -572,7 +593,7 @@ async function openProjects(preloaded){
   }catch(error){if(generation!==projectDialogGeneration||!$('#cloud-projects-list'))return;$('#cloud-projects-list').innerHTML=`<p class="project-message error">${esc(error.message)}</p><div class="projects-error-actions"><button class="button secondary" id="reload-cloud-projects">Prøv igjen</button></div>`;$('#reload-cloud-projects').onclick=openProjects;}
 }
 function openDeleteProject(record){
-  openDialog('Slette prosjektet?',record.project.name,`<p class="account-note">Prosjektet og alle tilhørende opplastede filer slettes fra kontoen. Dette kan ikke angres. ${record.status==='deleting'?'En tidligere sletting ble avbrutt. Prøv igjen for å fullføre.':''}</p><p id="delete-project-error" class="project-message error" hidden></p>`,`<button class="button secondary" id="delete-project-cancel">Behold prosjektet</button><button class="button danger" id="delete-project-confirm">${icon('trash')} Slett prosjekt og filer</button>`);
+  openDialog('Slette prosjektet?',record.project.name,`<p class="account-note">Prosjektet og alle tilhørende opplastede filer slettes fra denne enheten. Dette kan ikke angres. ${record.status==='deleting'?'En tidligere sletting ble avbrutt. Prøv igjen for å fullføre.':''}</p><p id="delete-project-error" class="project-message error" hidden></p>`,`<button class="button secondary" id="delete-project-cancel">Behold prosjektet</button><button class="button danger" id="delete-project-confirm">${icon('trash')} Slett prosjekt og filer</button>`);
   $('#delete-project-cancel').onclick=openProjects;
   $('#delete-project-confirm').onclick=async e=>{
     if(filesBusy){toast('Vent til opplastingen er ferdig.');return;}
@@ -593,23 +614,20 @@ function validateProjectImport(data){
   if(value.format!=='romly-v1'||!Array.isArray(value.plan.rooms)||(!value.plan.rooms.length&&value.plan.variant!=='custom')||value.plan.rooms.length>30||!value.plan.rooms.every(room=>typeof room.id==='string'&&typeof room.name==='string'&&room.name.length<80&&['x','y','w','h','width','height'].every(key=>Number.isFinite(room[key])&&Math.abs(room[key])<10000)&&room.w>0&&room.h>0&&room.width>0&&room.height>0&&/^#[a-f\d]{6}$/i.test(room.color)))throw new Error('Filen er ikke et gyldig Romly-prosjekt.');
   return value;
 }
-async function initializeCloud(){
-  renderSaveStatus({state:'loading',message:'Kobler til kontoen …'});
+// No sign-in for now: projects and files live in this browser (local-store.js). The cloud api
+// in cloud.js and the server routes are kept, unused, for when accounts come back.
+async function initializeStorage(){
+  renderSaveStatus({state:'loading',message:'Åpner lagringen …'});
   try{
     let preferredId;try{preferredId=localStorage.getItem('romly-last-active-id');}catch{}
-    const bootstrap=await api.bootstrap(preferredId);session=bootstrap;sessionReady=true;sync.user=session.user;
-    $('#profile-btn').textContent=session.user?initials(session.user.name||session.user.email):'Logg inn';
-    $('#profile-btn').classList.toggle('signed-out',!session.user);
-    $('#profile-btn').setAttribute('aria-label',session.user?'Åpne kontoen til '+(session.user.name||session.user.email):'Logg inn');
-    $('#profile-btn').title=session.user?.name||'Logg inn';
-    if(!session.user){sync.activate(null);openAccount();return;}
+    const bootstrap=await api.bootstrap(preferredId);sessionReady=true;sync.user=session.user;
     if(bootstrap.project){await withProjectTransition(()=>applyCloudRecord(bootstrap.project,{files:bootstrap.files||[]}));}
     else{sync.activate(null);openProjects(bootstrap.hasProjects?undefined:[]);}
-  }catch(error){sessionReady=false;renderSaveStatus({state:'error',message:'Kontotjenesten er utilgjengelig',error});toast(error.message);openAccount();}
+  }catch(error){reportProblem(error,{context:'storage-init'});sessionReady=false;sync.activate(null);renderSaveStatus({state:'error',message:'Nettleseren tillater ikke lagring',error});openStorage();}
 }
 function openInspiration(){openDialog('Et hjem som føles som deg','Tre retninger å utforske i din egen plan.',`<div class="inspiration-grid">${[{name:'Lunt og naturlig',text:'Lys eik, varme tekstiler og rolige grønntoner.',color:'#e9dfcc',cls:'natural'},{name:'Varm minimalisme',text:'Gyldent treverk, myke former og færre elementer.',color:'#d7bc98',cls:'warm-minimal'},{name:'Lyst og tidløst',text:'Lyse flater, dempede gråtoner og rene linjer.',color:'#e3e4df',cls:'timeless'}].map(x=>`<button class="inspiration-card" data-inspo="${x.color}"><span class="inspiration-visual ${x.cls}"><i></i><i></i><i></i></span><h3>${x.name}</h3><p>${x.text}</p><strong>Prøv i valgt rom ${icon('arrow-right')}</strong></button>`).join('')}</div>`, '',true);document.querySelectorAll('[data-inspo]').forEach(b=>b.onclick=()=>{editor.updateRoom(selectedId,{color:b.dataset.inspo});closeDialog();toast('Materialet er lagt til i det valgte rommet.');});}
 function openShortcuts(){openDialog('Litt raskere fra tanke til tegning','Hurtigtaster i designstudioet.',`<div class="shortcut-grid">${[['Velg og flytt','V'],['Tegn rom','R'],['Tegn skillevegger','W'],['Plasser dør','D'],['Plasser vindu','F'],['Panorer','H'],['Zoom','Rullehjul'],['Roter eller snu valgt','Q / E'],['Dupliser valgt','Ctrl + D'],['Flytt valgt','Piltaster (Shift for større steg)'],['Angre','Ctrl + Z'],['Gjør om','Ctrl + Shift + Z'],['Fjern valgt element','Delete'],['Tilbake til velg','Esc']].map(([n,k])=>`<span>${n}</span><kbd>${k}</kbd>`).join('')}</div>`);}
-$('#help-btn').onclick=openHelp;$('#projects-nav').onclick=$('#breadcrumb-home').onclick=openProjects;$('#profile-btn').onclick=openAccount;$('#inspiration-nav').onclick=openInspiration;$('#export-btn').onclick=openExport;$('#check-btn').onclick=$('#summary-check').onclick=()=>workflow(4);$('#new-suggestion').onclick=()=>workflow(2);$('#shortcuts-btn').onclick=openShortcuts;
+$('#help-btn').onclick=openHelp;$('#projects-nav').onclick=$('#breadcrumb-home').onclick=openProjects;$('#profile-btn').onclick=openStorage;$('#inspiration-nav').onclick=openInspiration;$('#export-btn').onclick=openExport;$('#check-btn').onclick=$('#summary-check').onclick=()=>workflow(4);$('#new-suggestion').onclick=()=>workflow(2);$('#shortcuts-btn').onclick=openShortcuts;
 $('#floor-info').onclick=()=>toast('Eksempelprosjektet inneholder én etasje. Alle rom vises i denne planen.');
 $('#insight-btn').onclick=()=>{openDialog('Mer plass til å være sammen','Et åpent rom trenger også gode soner.',`<div class="help-steps"><article class="help-step"><span class="room-icon">${icon('sofa')}</span><div><h3>La møblene skape soner</h3><p>Bruk sofa, spisebord og belysning til å definere ulike områder uten å lukke rommet.</p></div></article><article class="help-step"><span class="room-icon">${icon('wall')}</span><div><h3>Avklar veggen før du åpner opp</h3><p>En tegning eller et bilde kan ikke fastslå om veggen er bærende. Få konstruksjonen vurdert av fagfolk før riving.</p><a class="text-link" href="https://www.dibk.no/bygge-eller-endre/arbeid-pa-eksisterende-bygg/innvendig-ombygging" target="_blank" rel="noopener noreferrer">Les DiBKs veiledning ↗</a></div></article></div>`);};
 // Editor shortcuts never fire while a form control has focus; Delete/arrows also leave focused buttons and links alone.
@@ -636,9 +654,9 @@ function updateWorkflowProgress(){
 window.addEventListener('beforeunload',event=>{if(sync.dirty||sync.saving||filesBusy||transitioning){event.preventDefault();event.returnValue='';}});
 $('#save-status').onclick=()=>{if(sync.error)showSaveProblem();};
 $('#save-status').onkeydown=e=>{if((e.key==='Enter'||e.key===' ')&&sync.error){e.preventDefault();showSaveProblem();}};
-$('#retry-save-btn').onclick=async()=>{if(isRevisionConflict(sync.error)||sync.error?.status===401){showSaveProblem();return;}try{await sync.flush();toast('Endringene er lagret på kontoen.');}catch(error){showSaveProblem(error);}};
+$('#retry-save-btn').onclick=async()=>{if(isRevisionConflict(sync.error)||sync.error?.status===401){showSaveProblem();return;}try{await sync.flush();toast('Endringene er lagret.');}catch(error){showSaveProblem(error);}};
 $('#save-copy-btn').onclick=()=>showSaveProblem();
 $('#backup-unsaved-btn').onclick=downloadProjectBackup;
 window.addEventListener('online',()=>{if(sync.dirty&&!isRevisionConflict(sync.error))sync.flush().catch(()=>{});});
 window.romly={editor,getProject:()=>({...project}),getUploads:()=>uploads.length,getSession:()=>session,getActiveRecord:()=>activeRecord,getSync:()=>({dirty:sync.dirty,state:lastSaveStatus.state,revision:sync.record?.revision,transitioning,filesBusy}),flush:()=>sync.flush()};
-initializeCloud();
+initializeStorage();

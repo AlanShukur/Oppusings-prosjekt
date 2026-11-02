@@ -51,8 +51,11 @@ const sameContent = (a, b) => JSON.stringify(canonical(a)) === JSON.stringify(ca
 
 /** Serialized writes keep the revision and editor snapshot paired across saves. */
 export class ProjectSync {
-  constructor(onStatus = () => {}) {
+  /** `client` is the storage api (cloud by default, or the local store); `where` words the status, e.g. 'på denne enheten'. */
+  constructor(onStatus = () => {}, { client = api, where = 'på kontoen' } = {}) {
     this.onStatus = onStatus;
+    this.client = client;
+    this.where = where;
     this.user = null;
     this.record = null;
     this.pending = null;
@@ -69,7 +72,7 @@ export class ProjectSync {
   errorStatus(error, retrying = false) {
     if (isRevisionConflict(error)) return ['conflict', 'Nyere versjon finnes · Løs konflikten'];
     if (isSignedOut(error)) return ['error', 'Du er logget ut · Logg inn for å lagre'];
-    return ['error', retrying ? 'Ikke lagret ennå · Prøver igjen automatisk' : 'Ikke lagret på kontoen · Prøv igjen'];
+    return ['error', retrying ? 'Ikke lagret ennå · Prøver igjen automatisk' : `Ikke lagret ${this.where} · Prøv igjen`];
   }
 
   get dirty() { return this.sequence !== this.savedSequence; }
@@ -87,7 +90,7 @@ export class ProjectSync {
     this.sequence = this.savedSequence = 0;
     this.error = null;
     this.generation++;
-    this.status(record ? 'saved' : 'demo', record ? 'Lagret på kontoen' : 'Eksempelvisning · Ikke lagret');
+    this.status(record ? 'saved' : 'demo', record ? `Lagret ${this.where}` : 'Eksempelvisning · Ikke lagret');
   }
 
   mark(snapshot) {
@@ -138,10 +141,10 @@ export class ProjectSync {
     const snapshot = copy(this.pending);
     const revision = this.record.revision;
     this.error = null;
-    this.status('saving', 'Lagrer på kontoen …');
+    this.status('saving', `Lagrer ${this.where} …`);
     this.saving = (async () => {
       try {
-        const result = await api.save(id, { ...snapshot, revision });
+        const result = await this.client.save(id, { ...snapshot, revision });
         if (this.generation !== generation || this.record?.id !== id) return;
         this.acknowledge(result.project, sequence);
       } catch (error) {
@@ -151,7 +154,7 @@ export class ProjectSync {
         // exactly this snapshot, adopt it instead of reporting a conflict with ourselves.
         if (isRevisionConflict(error) && error.details?.currentRevision === revision + 1) {
           try {
-            const current = (await api.get(id)).project;
+            const current = (await this.client.get(id)).project;
             if (this.generation === generation && current?.id === id && sameContent({ project: current.project, plan: current.plan }, snapshot)) {
               this.acknowledge(current, sequence);
               return;
@@ -180,6 +183,6 @@ export class ProjectSync {
     this.retries = 0;
     if (!this.dirty) this.clearRecovery();
     else this.writeRecovery();
-    this.status(this.dirty ? 'pending' : 'saved', this.dirty ? 'Nye endringer venter på lagring' : 'Lagret på kontoen');
+    this.status(this.dirty ? 'pending' : 'saved', this.dirty ? 'Nye endringer venter på lagring' : `Lagret ${this.where}`);
   }
 }

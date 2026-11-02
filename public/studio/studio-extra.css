@@ -1,5 +1,9 @@
 /* Item inspector, room facts and the plan-derived TEK17 check. Loaded after the base studio styles. */
 .item-properties,.room-facts{grid-column:1/-1}
+/* Storage button (replaces the account avatar) and footer links. */
+#profile-btn{display:inline-flex;align-items:center;justify-content:center;padding:0}
+#profile-btn svg{width:16px;height:16px}
+.footer-link{color:inherit;text-decoration:underline;text-underline-offset:3px}
 /* Labels set their own display, which would otherwise override the hidden attribute. */
 .item-properties [hidden],.item-properties[hidden]{display:none!important}
 .item-properties{border:1px solid #e7dbf1;background:#fbf8fd;border-radius:9px;padding:11px 12px;margin:0 0 14px}

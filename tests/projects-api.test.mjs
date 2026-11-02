@@ -468,3 +468,33 @@ test('an account cannot store more than the per-user byte quota across projects'
   assert.equal((await json(await api(`/api/projects/${second.id}/files`), 200)).files.length, 0);
   assert.equal((await upload(second.id, { user: other })).status, 404);
 });
+
+test('studio crash reports are accepted without sign-in, scrubbed and logged with the environment', async () => {
+  const logged = [];
+  const original = console.error;
+  console.error = (...args) => logged.push(args);
+  try {
+    env.ROMLY_ENV = 'staging';
+    const report = { kind: 'error', message: 'Feil for kari@example.no med kontonummer 12345678901', stack: 'at x (/studio/app.js?v=2:1:1)', page: '/studio/index.html', release: 'sprint-1', context: '3d' };
+    const response = await api('/api/client-errors', { method: 'POST', body: report, user: null });
+    assert.equal(response.status, 204);
+    const [label, entry] = logged.at(-1);
+    assert.equal(label, 'Romly client error');
+    assert.equal(entry.env, 'staging');
+    assert.equal(entry.page, '/studio/index.html');
+    assert.doesNotMatch(JSON.stringify(entry), /kari@example|12345678901|\?v=2/);
+  } finally { console.error = original; delete env.ROMLY_ENV; }
+});
+
+test('crash reports must be same-origin, small, well-formed JSON sent with POST', async () => {
+  const report = { kind: 'error', message: 'Feil' };
+  const original = console.error;
+  console.error = () => {};
+  try {
+    assert.equal((await api('/api/client-errors', { method: 'POST', body: report, user: null, headers: { Origin: 'https://evil.example' } })).status, 403);
+    assert.equal((await api('/api/client-errors', { method: 'POST', body: { ...report, message: 'x'.repeat(9000) }, user: null })).status, 413);
+    assert.equal((await api('/api/client-errors', { method: 'POST', body: { kind: 'virus', message: 'Feil' }, user: null })).status, 400);
+    assert.equal((await api('/api/client-errors', { method: 'POST', body: 'ikke json', user: null, headers: { 'Content-Type': 'text/plain' } })).status, 415);
+    assert.equal((await api('/api/client-errors', { user: null })).status, 405);
+  } finally { console.error = original; }
+});
