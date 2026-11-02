@@ -42,6 +42,12 @@ export const api = {
 };
 
 const copy = data => JSON.parse(JSON.stringify(data));
+/** Only a stale revision is a conflict; other 409s (file in use, project deleting) are ordinary errors. */
+export const isRevisionConflict = error => error?.status === 409 && (error.code === 'revision_conflict' || error.code === undefined);
+export const isSignedOut = error => error?.status === 401;
+const isTransient = error => !error?.status || error.status >= 500;
+const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().filter(key => value[key] !== undefined).map(key => [key, canonical(value[key])])) : value;
+const sameContent = (a, b) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
 
 /** Serialized writes keep the revision and editor snapshot paired across saves. */
 export class ProjectSync {
@@ -56,6 +62,14 @@ export class ProjectSync {
     this.timer = null;
     this.error = null;
     this.generation = 0;
+    this.retries = 0;
+    this.retryTimer = null;
+  }
+
+  errorStatus(error, retrying = false) {
+    if (isRevisionConflict(error)) return ['conflict', 'Nyere versjon finnes · Løs konflikten'];
+    if (isSignedOut(error)) return ['error', 'Du er logget ut · Logg inn for å lagre'];
+    return ['error', retrying ? 'Ikke lagret ennå · Prøver igjen automatisk' : 'Ikke lagret på kontoen · Prøv igjen'];
   }
 
   get dirty() { return this.sequence !== this.savedSequence; }
@@ -66,6 +80,8 @@ export class ProjectSync {
   activate(record) {
     if (this.saving) throw new Error('Vent til lagringen er ferdig før du bytter prosjekt.');
     clearTimeout(this.timer);
+    clearTimeout(this.retryTimer);
+    this.retries = 0;
     this.record = record ? copy(record) : null;
     this.pending = null;
     this.sequence = this.savedSequence = 0;
@@ -83,7 +99,7 @@ export class ProjectSync {
     this.sequence++;
     this.writeRecovery();
     clearTimeout(this.timer);
-    if (this.error?.status === 409) {
+    if (isRevisionConflict(this.error)) {
       this.status('conflict', 'Nyere versjon finnes · Løs konflikten');
       return;
     }
@@ -108,13 +124,14 @@ export class ProjectSync {
 
   async flush() {
     clearTimeout(this.timer);
+    clearTimeout(this.retryTimer);
     if (this.saving) {
       await this.saving;
       if (this.dirty) return this.flush();
       return;
     }
     if (!this.dirty || !this.record || !this.user) return;
-    if (this.error?.status === 409) throw this.error;
+    if (isRevisionConflict(this.error)) throw this.error;
     const id = this.record.id;
     const generation = this.generation;
     const sequence = this.sequence;
@@ -126,22 +143,43 @@ export class ProjectSync {
       try {
         const result = await api.save(id, { ...snapshot, revision });
         if (this.generation !== generation || this.record?.id !== id) return;
-        this.record = result.project;
-        this.savedSequence = sequence;
-        this.error = null;
-        if (!this.dirty) this.clearRecovery();
-        else this.writeRecovery();
-        this.status(this.dirty ? 'pending' : 'saved', this.dirty ? 'Nye endringer venter på lagring' : 'Lagret på kontoen');
+        this.acknowledge(result.project, sequence);
       } catch (error) {
-        if (this.generation === generation) {
-          this.error = error;
-          this.writeRecovery();
-          this.status(error.status === 409 ? 'conflict' : 'error', error.status === 409 ? 'Nyere versjon finnes · Løs konflikten' : 'Ikke lagret på kontoen · Prøv igjen');
+        if (this.generation !== generation) throw error;
+        // A save whose response was lost (timeout, dropped connection) comes back as a conflict
+        // with our own write: exactly one revision ahead. If the account version already holds
+        // exactly this snapshot, adopt it instead of reporting a conflict with ourselves.
+        if (isRevisionConflict(error) && error.details?.currentRevision === revision + 1) {
+          try {
+            const current = (await api.get(id)).project;
+            if (this.generation === generation && current?.id === id && sameContent({ project: current.project, plan: current.plan }, snapshot)) {
+              this.acknowledge(current, sequence);
+              return;
+            }
+          } catch { /* Keep the original conflict. */ }
         }
+        this.error = error;
+        this.writeRecovery();
+        const retrying = isTransient(error) && this.retries < 3;
+        if (retrying) {
+          this.retries++;
+          this.retryTimer = setTimeout(() => this.flush().catch(() => {}), 2000 * 2 ** (this.retries - 1));
+        }
+        this.status(...this.errorStatus(error, retrying));
         throw error;
       }
     })();
     try { await this.saving; } finally { this.saving = null; }
     if (this.dirty) return this.flush();
+  }
+
+  acknowledge(record, sequence) {
+    this.record = record;
+    this.savedSequence = sequence;
+    this.error = null;
+    this.retries = 0;
+    if (!this.dirty) this.clearRecovery();
+    else this.writeRecovery();
+    this.status(this.dirty ? 'pending' : 'saved', this.dirty ? 'Nye endringer venter på lagring' : 'Lagret på kontoen');
   }
 }

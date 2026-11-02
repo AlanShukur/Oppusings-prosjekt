@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ProjectSync } from '../public/studio/cloud.js';
+import { ProjectSync, isRevisionConflict } from '../public/studio/cloud.js';
 
 const userA = { id: 'account-a', name: 'Kari' };
 const userB = { id: 'account-b', name: 'Ola' };
@@ -63,7 +63,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  for (const sync of instances) clearTimeout(sync.timer);
+  for (const sync of instances) { clearTimeout(sync.timer); clearTimeout(sync.retryTimer); }
   globalThis.fetch = originalFetch;
   if (originalStorage) Object.defineProperty(globalThis, 'localStorage', originalStorage);
   else delete globalThis.localStorage;
@@ -253,4 +253,52 @@ test('concurrent callers waiting for a save share the same ordered writes', asyn
   assert.equal(calls.length, 2);
   assert.equal(sync.record.revision, 3);
   assert.equal(sync.dirty, false);
+});
+
+function respond(call, body, status = 200) {
+  call.resolve(new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } }));
+}
+
+test('a lost save response is recognised as our own write instead of a conflict', async () => {
+  const { sync, statuses } = syncFor();
+  const snapshot = edited('Lagret, men svaret kom aldri');
+  sync.mark(snapshot);
+  const saving = sync.flush();
+  await waitForRequests(1);
+  conflict(calls[0], 2);
+  await waitForRequests(2);
+  assert.equal(calls[1].options.method ?? 'GET', 'GET');
+  respond(calls[1], { project: { ...record('project-a', 2), ...snapshot }, files: [] });
+  await saving;
+  assert.equal(sync.record.revision, 2);
+  assert.equal(sync.dirty, false);
+  assert.equal(statuses.at(-1).state, 'saved');
+});
+
+test('a one-revision conflict with different content is still a conflict', async () => {
+  const { sync, statuses } = syncFor();
+  sync.mark(edited('Min endring'));
+  const saving = sync.flush();
+  await waitForRequests(1);
+  conflict(calls[0], 2);
+  await waitForRequests(2);
+  respond(calls[1], { project: { ...record('project-a', 2), project: { ...record().project, name: 'Endret i en annen fane' } }, files: [] });
+  await assert.rejects(saving, error => isRevisionConflict(error));
+  assert.equal(statuses.at(-1).state, 'conflict');
+});
+
+test('a 409 that is not a revision conflict does not block later saves', async () => {
+  const { sync, statuses } = syncFor();
+  sync.mark(edited('Første'));
+  const saving = sync.flush();
+  await waitForRequests(1);
+  respond(calls[0], { error: { code: 'reference_unavailable', message: 'Underlaget ble endret.' } }, 409);
+  await assert.rejects(saving, error => error.code === 'reference_unavailable');
+  assert.equal(statuses.at(-1).state, 'error');
+  sync.mark(edited('Andre'));
+  const retry = sync.flush();
+  await waitForRequests(2);
+  success(calls[1]);
+  await retry;
+  assert.equal(statuses.at(-1).state, 'saved');
 });

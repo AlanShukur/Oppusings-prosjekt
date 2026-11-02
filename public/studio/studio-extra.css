@@ -1,0 +1,35 @@
+/* Item inspector, room facts and the plan-derived TEK17 check. Loaded after the base studio styles. */
+.item-properties,.room-facts{grid-column:1/-1}
+/* Labels set their own display, which would otherwise override the hidden attribute. */
+.item-properties [hidden],.item-properties[hidden]{display:none!important}
+.item-properties{border:1px solid #e7dbf1;background:#fbf8fd;border-radius:9px;padding:11px 12px;margin:0 0 14px}
+.item-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px;font-size:11px;color:#4f4a5a}
+.item-warning{font-size:9px;color:#b2443c;background:#fbeceb;border:1px solid #f1cfcb;border-radius:4px;padding:3px 6px}
+.item-actions{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.item-actions .button{padding:6px 9px;font-size:10px;gap:5px}
+.item-actions .button svg{width:13px;height:13px}
+.item-fields{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px}
+.item-fields .check-row{margin:6px 0 0}
+.item-hint{font-size:9px;color:#9a93a6;margin:6px 0 0;line-height:1.45}
+.room-facts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 4px}
+.room-facts select.input{margin-top:6px}
+
+.check-summary{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 2px}
+.check-chip{font-size:10px;border-radius:999px;padding:4px 9px;border:1px solid #e6e1ea;background:#faf9fb;color:#6a6474}
+.check-item[data-status="brudd"] .check-status,.check-chip[data-status="brudd"]{color:#a9362f;background:#fbeceb;border-color:#f1cfcb}
+.check-item[data-status="soknad"] .check-status,.check-chip[data-status="soknad"]{color:#8a4b12;background:#fdf1e4;border-color:#f3d8b8}
+.check-item[data-status="advarsel"] .check-status,.check-chip[data-status="advarsel"]{color:#8a6a12;background:#fdf8e6;border-color:#f0e2b0}
+.check-item[data-status="ukjent"] .check-status,.check-chip[data-status="ukjent"]{color:#5e6378;background:#f1f3f8;border-color:#dde1ea}
+.check-item[data-status="ok"] .check-status,.check-chip[data-status="ok"]{color:#2f6b45;background:#ebf6ef;border-color:#c9e6d3}
+.check-item[data-status="info"] .check-status,.check-chip[data-status="info"]{color:#6a6474;background:#f6f4f8;border-color:#e6e1ea}
+.check-item p{margin:6px 0 0;line-height:1.5}
+.check-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:7px}
+.check-actions button{color:#7c5fb3;font-size:10px;text-decoration:underline;text-underline-offset:3px}
+.check-group-title{font-size:11px;letter-spacing:.02em;color:#8e879a;margin:16px 0 8px;text-transform:uppercase}
+.facts-form{border:1px solid #eae4ef;border-radius:10px;padding:12px 14px;margin:14px 0 4px}
+.facts-form summary{cursor:pointer;font-weight:600;font-size:12px;color:#4f4a5a}
+.facts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:4px 16px;margin-top:12px}
+.facts-grid .field{margin-bottom:8px;font-size:11px}
+.facts-grid .input{font-size:12px}
+.check-assumptions{font-size:10px;color:#8e879a;margin:14px 0 0;padding-left:18px;line-height:1.5}
+@media (max-width:900px){.room-facts,.item-fields{grid-template-columns:1fr}.item-fields input,.room-facts input,.room-facts select,.facts-grid .input{font-size:16px}}
