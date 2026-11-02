@@ -12,12 +12,13 @@ Until you add the two secrets below, the Deploy workflow skips and deploys nothi
 ## One-time setup (about 15 minutes)
 
 1. **Cloudflare account.** Sign up at cloudflare.com. The free plan covers Workers and Workers Logs at this scale.
-2. **Account ID.** In the Cloudflare dashboard, open *Workers & Pages*. Copy the Account ID shown on the right.
-3. **API token.** Go to *My Profile → API Tokens → Create Token*, use the **Edit Cloudflare Workers** template and limit it to your account. Copy the token; it is shown only once.
-4. **GitHub secrets.** In the GitHub repo, open *Settings → Secrets and variables → Actions → New repository secret* and add:
-   - `CLOUDFLARE_API_TOKEN`: the token from step 3
-   - `CLOUDFLARE_ACCOUNT_ID`: the ID from step 2
-5. **Protect production (recommended).** Open *Settings → Environments → production → Required reviewers* and add yourself. Then every production deploy waits for your approval. The `production` environment appears after the first production run; you can also create it here yourself.
+2. **workers.dev subdomain (once per account).** In the dashboard, open *Workers & Pages* and pick a subdomain when asked, for example `romly`. Your Workers are then served at `<worker>.<subdomain>.workers.dev`. Without it the deploy uploads the Worker but fails at the end with "You need to register a workers.dev subdomain". If you are not asked, go to *Workers & Pages → Account details (right column) → Subdomain → Change*.
+3. **Account ID.** In the Cloudflare dashboard, open *Workers & Pages*. Copy the Account ID shown on the right.
+4. **API token.** Go to *My Profile → API Tokens → Create Token*, use the **Edit Cloudflare Workers** template and limit it to your account. Copy the token; it is shown only once.
+5. **GitHub secrets.** In the GitHub repo, open *Settings → Secrets and variables → Actions → New repository secret* and add:
+   - `CLOUDFLARE_API_TOKEN`: the token from step 4
+   - `CLOUDFLARE_ACCOUNT_ID`: the ID from step 3
+6. **Protect production (recommended).** Open *Settings → Environments → production → Required reviewers* and add yourself. Then every production deploy waits for your approval. The `production` environment appears after the first production run; you can also create it here yourself.
 
 ## Deploying
 

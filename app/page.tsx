@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { SiteFooter, SiteHeader, STUDIO_URL } from "@/components/site-chrome";
 
 const FONT = { fontFamily: "Manrope, ui-sans-serif, system-ui, sans-serif" };
@@ -116,14 +115,14 @@ export default function Home() {
             <p className="mt-3 leading-relaxed text-[#5f5a6b]">
               Du trenger ingen konto. Tegninger, ønsker og filer du laster opp lagres bare i nettleseren på enheten din, og sendes ikke til noen server. Last ned en sikkerhetskopi når du vil ta vare på arbeidet.
             </p>
-            <Link href="/personvern" className="mt-4 inline-block text-sm font-semibold text-[#6a52bf] underline underline-offset-4">Les om personvern</Link>
+            <a href="/personvern" className="mt-4 inline-block text-sm font-semibold text-[#6a52bf] underline underline-offset-4">Les om personvern</a>
           </div>
           <div className="rounded-xl border border-[#ece7f3] p-6">
             <h2 className="text-xl font-extrabold tracking-[-0.4px]">Veiledende, ikke godkjenning</h2>
             <p className="mt-3 leading-relaxed text-[#5f5a6b]">
               Romly sammenligner tegningen med DiBKs preaksepterte ytelser og viser kilden for hvert punkt. Det er et godt utgangspunkt for samtalen med fagfolk, men ingen teknisk kontroll. Bæring, brann og søknadsplikt må alltid avklares for ditt konkrete tiltak.
             </p>
-            <Link href="/vilkar" className="mt-4 inline-block text-sm font-semibold text-[#6a52bf] underline underline-offset-4">Les vilkårene</Link>
+            <a href="/vilkar" className="mt-4 inline-block text-sm font-semibold text-[#6a52bf] underline underline-offset-4">Les vilkårene</a>
           </div>
         </section>
 
