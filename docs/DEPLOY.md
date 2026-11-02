@@ -24,6 +24,7 @@ Until you add the two secrets below, the Deploy workflow skips and deploys nothi
 
 - **Staging:** merge a pull request into `main`. The *Deploy* workflow runs the checks and tests, builds, and deploys to `romly-staging`.
 - **Production:** open *Actions → Deploy → Run workflow*, choose `production` and run it. Do this after you have tried the change on staging.
+- **Deploying again:** always start a *new* run (*Run workflow*). Don't use *Re-run* on an old Deploy run: it rebuilds that run's original commit, which would put older code back. The workflow refuses such runs and says why.
 
 From your own machine (PowerShell):
 
