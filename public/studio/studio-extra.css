@@ -37,3 +37,5 @@
 .facts-grid .input{font-size:12px}
 .check-assumptions{font-size:10px;color:#8e879a;margin:14px 0 0;padding-left:18px;line-height:1.5}
 @media (max-width:900px){.room-facts,.item-fields{grid-template-columns:1fr}.item-fields input,.room-facts input,.room-facts select,.facts-grid .input{font-size:16px}}
+/* The toast is a manual popover so it can sit above open dialogs; undo the browser's popover placement and keep it rendered for the fade. */
+.toast[popover]{inset:auto;left:50%;bottom:17px;margin:0;overflow:visible;display:block}
