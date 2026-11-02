@@ -39,6 +39,15 @@ jobs:
           fi
       - uses: actions/checkout@v4
         if: steps.configured.outputs.ready == 'true'
+      # "Re-run" on an old Deploy run rebuilds that run's commit and would roll the site back.
+      - name: Refuse to deploy an older commit
+        if: steps.configured.outputs.ready == 'true'
+        run: |
+          git fetch --quiet origin main
+          if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
+            echo "Not deployed: this run is for $(git rev-parse --short HEAD), but main is at $(git rev-parse --short origin/main). Re-running an old deploy would roll the site back. Start a new run instead: Actions → Deploy → Run workflow." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
       - uses: actions/setup-node@v4
         if: steps.configured.outputs.ready == 'true'
         with:
