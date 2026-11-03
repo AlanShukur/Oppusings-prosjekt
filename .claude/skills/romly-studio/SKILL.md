@@ -14,6 +14,7 @@ Romly is a Norwegian renovation planner. The **studio** (`public/studio/`) is a 
 | `app.js` | UI wiring: dialogs, the room and item inspectors, keyboard shortcuts, the projects and storage dialogs, the TEK17 check UI (`FACT_QUESTIONS`, `renderCheckResults`, `downloadReport`), import and export. `window.romly` test hooks are on the last line. |
 | `plan.js` | `PlanEditor`: the SVG 2D editor. It holds state, tools (select, pan, room, wall, door, window), viewport and zoom, resize, move and snap, and attaching openings to walls. Exports `exampleOpenings`, `upgradeExamplePlan`, `MAX_ROOMS` and `MAX_ITEMS`. |
 | `scene-geometry.js` | Pure geometry: `deriveWalls`, `assignOpenings`, `doorSwing`, `openingOnWall`. 3D, TEK17 and the tests all share it, so fix geometry here, never in a caller. |
+| `plan-diff.js` | Pure comparison with the saved baseline ("Dagens planløsning"): `compareToBaseline(plan)` returns removed and new walls, changed openings, and room overlaps. The editor's ghosts, the TEK17 check and the brief all use it. |
 | `viewer3d.js` | three.js scene, loaded lazily. |
 | `tek17-check.js` | Pure TEK17 engine. Read the **romly-tek17** skill before changing it. |
 | `local-store.js` | On-device storage in IndexedDB. It keeps the same contract as the server API: revisions, limits, file sniffing, atomic deletes, `romly-backup-v1` export. |
@@ -43,6 +44,11 @@ Romly is a Norwegian renovation planner. The **studio** (`public/studio/`) is a 
   - **Lifetime:** a note survives resizes and moves while the rooms still share the wall. `notify()` drops notes whose wall is gone, and undo brings them back.
   - **Shared keys:** pieces of one room side that face no other room share a key, and so share a note.
   - **Editor API:** `selectWall`, `updateWall` and `wallNote`; `onWallSelect` drives the "Vegg" panel. Room walls are never deleted; `removeSelected` refuses while a wall is selected.
+- **Baseline (version 3):** `plan.baseline` = `{savedAt, rooms, items, walls}`, a snapshot of the plan "as the home is today".
+  - **Editor API:** `setBaseline()` copies the current rooms, items and wall notes, so load-bearing marks made before saving travel with it. `clearBaseline()` removes it. `updateBaselineWall(key, {loadBearing})` records an answer about a wall that only exists in the baseline. All three support undo.
+  - **Loading:** `loadState` cleans the baseline through `cleanBaseline`. Loading a plan without one drops it, as does a fresh trace (`setReference` with replace) or a new suggestion (`setVariant`).
+  - **Ghosts:** removed walls are drawn as `[data-removed-wall]` ghosts, hidden with `setLayers({baseline: false})`.
+  - **Comparison:** walls are compared as line segments within 2 units. Pieces under 0.2 m are ignored. Openings within 0.3 m of the same type count as the same opening. A moved wall reads as removed plus new.
 
 ## Things that must change together
 

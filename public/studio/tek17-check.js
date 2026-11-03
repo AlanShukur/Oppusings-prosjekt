@@ -7,6 +7,7 @@
  * when DiBK publishes changes, and keep old reports tied to the ruleset they were made with.
  */
 import { deriveWalls, assignOpenings } from './scene-geometry.js';
+import { compareToBaseline } from './plan-diff.js';
 
 // version changes whenever the rules change; verified is the date every source was last re-checked.
 export const RULESET = {id: 'tek17-veiledende', version: '2026-11-03', verified: '01.11.2026'};
@@ -82,6 +83,8 @@ export function evaluatePlan(plan = {}, project = {}) {
   const building = project.building || {}, measures = project.measures || {};
   const walls = deriveWalls(plan);
   const openings = assignOpenings(plan, walls);
+  // Changes since "Dagens planløsning", when the user has saved one (null otherwise).
+  const diff = compareToBaseline(plan);
   const results = [];
   const assumptions = new Set(['Mål er hentet fra tegningen. Rommål er målt til tegnet romkant og kan avvike fra bruksareal (BRA) innvendig.']);
   const add = (ruleId, ref, title, status, message, extra = {}) => results.push({ruleId, ref, title, status, message, url: SOURCES[ruleId.replace(/^tek17-/, '').replace(/-[a-z]+$/, '')] || extra.url, ...extra});
@@ -263,7 +266,9 @@ export function evaluatePlan(plan = {}, project = {}) {
   // § 13-15 Wet rooms and SAK10 § 4-1 e nr. 3
   if (baths.length) {
     add('tek17-13-15', 'TEK17 § 13-15', 'Våtrom', 'info', 'Våtrom må ha sluk, fall til sluk (dusjsone minst 1:50 innen 0,8 m fra sluk eller tilsvarende), tettesjikt, oppkant og synlig lekkasjevann. Arbeidet bør utføres av fagfolk.');
-    const newBath = known(building.existingBathrooms) && baths.length > building.existingBathrooms;
+    // A bathroom is new if the answer says so, or if less than half of it was a bathroom in today's plan.
+    const bathShare = bath => diff.overlaps.filter(o => o.current.id === bath.id && o.baseline.type === 'bath').reduce((sum, o) => sum + o.area, 0) / (bath.w * bath.h);
+    const newBath = (known(building.existingBathrooms) && baths.length > building.existingBathrooms) || (diff !== null && baths.some(bath => bathShare(bath) < 0.5));
     if (newBath || measures.newPipesThroughFireSeparation === true) {
       const risky = building.multiUnitBuilding === true && measures.newPipesThroughFireSeparation !== false;
       add('sak-4-1', 'SAK10 § 4-1 e nr. 3', 'Nytt bad', risky ? 'advarsel' : 'ok', risky
@@ -277,8 +282,8 @@ export function evaluatePlan(plan = {}, project = {}) {
   // A wall drawn in several pieces shares one key, so it is reported once.
   const marked = [...new Map(walls.filter(wall => wall.status !== 'existing').map(wall => [wall.key, wall])).values()];
   const demolished = marked.filter(wall => wall.status === 'demolish');
-  const describe = wall => {
-    const names = wall.roomIds.map(id => rooms.find(room => room.id === id)?.name).filter(Boolean);
+  const describe = (wall, roomList = rooms) => {
+    const names = wall.roomIds.map(id => roomList.find(room => room.id === id)?.name).filter(Boolean);
     if (wall.source === 'item') return 'En tegnet skillevegg';
     return names.length > 1 ? `Veggen mellom «${names[0]}» og «${names[1]}»` : names.length ? `Ytterveggen til «${names[0]}»` : 'En vegg';
   };
@@ -293,24 +298,50 @@ export function evaluatePlan(plan = {}, project = {}) {
   const newBearing = marked.filter(wall => wall.status === 'new' && wall.loadBearing === 'yes');
   for (const wall of newBearing) add('pbl-20-1', 'pbl § 20-1 b', 'Ny bærende vegg', 'advarsel', `${describe(wall)} er markert som ny og bærende. Det er en endring av bærende konstruksjon; avklar søknadsplikt med kommunen eller en fagperson.`, {wallKey: wall.key});
 
+  // Changes since "Dagens planløsning". A removed wall keeps the load-bearing note it had in the baseline; when it has
+  // none, the check asks (baselineWallKey lets the dialog record the answer on the baseline).
+  const removed = diff ? diff.removedWalls : [];
+  const removedExterior = removed.filter(wall => wall.source === 'room' && wall.exterior && !exteriorIsUncertain(wall.wall, diff.rooms));
+  for (const wall of removed) {
+    const label = `${describe(wall, diff.rooms)} i dagens planløsning`, link = {baselineWallKey: wall.key};
+    if (wall.loadBearing === 'yes') add('pbl-20-1', 'pbl § 20-1 b', 'Fjernet bærende vegg', 'soknad', `${label} er bærende og er fjernet i tegningen. Inngrep i bærevegg er en vesentlig endring og krever søknad med ansvarlige foretak (pbl § 20-3). En fagperson må vurdere hvordan lastene skal tas opp.`, link);
+    else if (wall.loadBearing === 'unknown') add('innvendig', 'DiBK · Innvendig ombygging', 'Var veggen bærende?', 'ukjent', `${label} er fjernet i tegningen. Var den bærende? Er den det, krever rivingen søknad.`, {...link, url: SOURCES.innvendig});
+    if (removedExterior.includes(wall)) add('pbl-20-5', 'pbl § 20-1 c', 'Fjernet yttervegg', 'advarsel', `${label} er fjernet i tegningen. Å fjerne eller endre en yttervegg er fasadeendring og i utgangspunktet søknadspliktig, og alltid søknadspliktig hvis bærende konstruksjon berøres.`, {url: SOURCES.fasade});
+  }
+  // A moved window counts as one removed and one new opening.
+  const changedOpenings = diff ? [...diff.newOpenings, ...diff.removedOpenings].filter(entry => entry.exterior).length : 0;
+  if (changedOpenings) add('pbl-20-5', 'pbl § 20-1 c', 'Vinduer og dører i yttervegg', 'advarsel', `Sammenlignet med dagens planløsning er det ${changedOpenings} ${changedOpenings === 1 ? 'endring' : 'endringer'} av vinduer eller dører i yttervegg. Nye, flyttede eller endrede vinduer og dører i yttervegg er fasadeendring og i utgangspunktet søknadspliktig. Unntak bare hvis bygningens karakter ikke endres, og kommunen avgjør det.`, {url: SOURCES.fasade});
+  const facadeFromDrawing = drawnFacade.length > 0 || removedExterior.length > 0 || changedOpenings > 0;
+  // A bod (tilleggsdel) in today's plan of which at least half is now part of a stue, kjøkken or soverom.
+  const convertedStorage = diff ? diff.rooms.filter(before => before.type === 'storage').map(before => {
+    const into = diff.overlaps.filter(o => o.baseline.id === before.id && classifyRoom(o.current) === 'stay');
+    return {before, into, share: into.reduce((sum, o) => sum + o.area, 0) / (before.w * before.h)};
+  }).filter(change => change.share >= 0.5) : [];
+  for (const change of convertedStorage) {
+    const names = [...new Set(change.into.map(o => `«${o.current.name}»`))].join(' og ');
+    add('bruksendring', 'SAK10 § 2-1 c', 'Bod blir oppholdsrom', 'soknad', `«${change.before.name}» i dagens planløsning er nå en del av ${names}. Å ta i bruk bod, kjeller eller loft som soverom eller stue er søknadspliktig bruksendring.`, {roomId: change.into[0].current.id, url: SOURCES.bruksendring});
+  }
+
   // Søknadsplikt triage (pbl § 20-1, SAK10 § 2-1/2-2/4-1, pbl § 20-5 f)
   // The drawing can only make the answer stricter: a demolished wall marked bærende counts even if the questionnaire says no.
-  const drawnBearing = demolished.some(wall => wall.loadBearing === 'yes') ? 'ja' : demolished.some(wall => wall.loadBearing === 'unknown') ? 'vet-ikke' : demolished.length ? 'nei' : null;
+  const changedWalls = [...demolished, ...removed];
+  const drawnBearing = changedWalls.some(wall => wall.loadBearing === 'yes') ? 'ja' : changedWalls.some(wall => wall.loadBearing === 'unknown') ? 'vet-ikke' : changedWalls.length ? 'nei' : null;
   const severity = {nei: 0, 'vet-ikke': 1, ja: 2};
   const bearingWall = [measures.bearingWall, drawnBearing].filter(answer => answer != null).sort((a, b) => severity[b] - severity[a])[0] ?? null;
   // Per-wall results above already explain answers that come from the drawing; only the questionnaire's own answer is repeated here.
   if (bearingWall === 'ja' && measures.bearingWall === 'ja') add('pbl-20-1', 'pbl § 20-1 b', 'Bærende konstruksjon', 'soknad', 'Inngrep i bærevegg eller bæresøyle er en vesentlig endring og krever søknad med ansvarlige foretak (pbl § 20-3).');
   else if (bearingWall === 'vet-ikke' && measures.bearingWall === 'vet-ikke') add('innvendig', 'DiBK · Innvendig ombygging', 'Bærende konstruksjon', 'advarsel', 'Få avklart om veggene du vil fjerne eller endre er bærende, for eksempel av en rådgivende ingeniør bygg, før riving.', {url: SOURCES.innvendig});
   else if (bearingWall == null) add('innvendig', 'DiBK · Innvendig ombygging', 'Riving av vegger', 'ukjent', 'Skal du fjerne eller endre vegger? Marker veggene i tegningen, eller svar på om noen av dem er bærende.', {url: SOURCES.innvendig});
-  if (measures.facade === true) add('pbl-20-5', 'pbl § 20-1 c / § 20-5 f', 'Fasadeendring', 'advarsel', 'Nye, flyttede eller endrede vinduer og dører i yttervegg er fasadeendring og i utgangspunktet søknadspliktig. Unntak bare hvis bygningens karakter ikke endres, og kommunen avgjør det. Alltid søknadspliktig hvis bærende konstruksjon berøres.', {url: SOURCES.fasade});
-  else if (measures.facade == null) add('pbl-20-5', 'pbl § 20-1 c', 'Fasadeendring', 'ukjent', 'Skal du lage nye, flytte eller endre vinduer eller dører i yttervegg?', {url: SOURCES.fasade});
+  // A facade change found in the drawing answers the facade question; the questionnaire then adds nothing.
+  if (measures.facade === true && !facadeFromDrawing) add('pbl-20-5', 'pbl § 20-1 c / § 20-5 f', 'Fasadeendring', 'advarsel', 'Nye, flyttede eller endrede vinduer og dører i yttervegg er fasadeendring og i utgangspunktet søknadspliktig. Unntak bare hvis bygningens karakter ikke endres, og kommunen avgjør det. Alltid søknadspliktig hvis bærende konstruksjon berøres.', {url: SOURCES.fasade});
+  else if (measures.facade == null && !facadeFromDrawing) add('pbl-20-5', 'pbl § 20-1 c', 'Fasadeendring', 'ukjent', 'Skal du lage nye, flytte eller endre vinduer eller dører i yttervegg?', {url: SOURCES.fasade});
   const derivedUseChange = rooms.some(room => room.previousUse === 'tilleggsdel' && classifyRoom(room) === 'stay');
   if (measures.useChange === 'tilleggsdel-hoveddel' || (measures.useChange == null && derivedUseChange)) add('bruksendring', 'SAK10 § 2-1 c', 'Bruksendring', 'soknad', 'Å ta i bruk bod, kjeller eller loft som soverom eller stue er søknadspliktig bruksendring.', {url: SOURCES.bruksendring});
   else if (measures.useChange === 'innen-hoveddel') add('bruksendring', 'DiBK · Bruksendring', 'Endret bruk av rom', 'advarsel', 'Du må søke hvis den nye bruken utløser nye tekniske krav, for eksempel til dagslys eller rømning.', {url: SOURCES.bruksendring});
-  else if (measures.useChange == null) add('bruksendring', 'DiBK · Bruksendring', 'Bruksendring', 'ukjent', 'Skal bod, kjeller eller loft tas i bruk som oppholdsrom?', {url: SOURCES.bruksendring});
+  else if (measures.useChange == null && !convertedStorage.length) add('bruksendring', 'DiBK · Bruksendring', 'Bruksendring', 'ukjent', 'Skal bod, kjeller eller loft tas i bruk som oppholdsrom?', {url: SOURCES.bruksendring});
   const entranceCount = doorEntries.filter(entry => entry.item.entrance === true).length;
   if (rooms.filter(isKitchen).length >= 2 && baths.length >= 2 && entranceCount >= 2) add('pbl-20-1', 'SAK10 § 2-2', 'Oppdeling', 'advarsel', 'Planen kan bli vurdert som oppdeling i flere boenheter (egne kjøkken, bad og innganger). Oppdeling er søknadspliktig (pbl § 20-1 g).');
-  if (bearingWall === 'nei' && !newBearing.length && !drawnFacade.length && measures.facade === false && (measures.useChange === 'nei' || measures.useChange == null && !derivedUseChange)) {
+  if (bearingWall === 'nei' && !newBearing.length && !facadeFromDrawing && !convertedStorage.length && measures.facade === false && (measures.useChange === 'nei' || measures.useChange == null && !derivedUseChange)) {
     add('sak-4-1', 'SAK10 § 4-1 e nr. 1', 'Ikke-bærende vegger', 'ok', 'Ikke-bærende vegger innenfor én branncelle er normalt unntatt søknad, forutsatt at lys, ventilasjon og brannsikring opprettholdes. Unntatte tiltak må likevel oppfylle TEK17.');
   }
 

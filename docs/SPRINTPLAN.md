@@ -98,6 +98,11 @@ Waiting on you:
 *Acceptance:* a new user can use Romly from the landing page with no account, take a backup, delete everything, and restore from the backup. Met in browser tests.
 
 ### Sprint 2: plan model v2 and sandbox quality
+
+*Status 03.11.2026.*
+- **Done:** plan format versions and migrations; walls with existing/new/demolish status and load-bearing marks that survive resizes; check rules for them; the "Dagens planløsning" baseline with comparison; the acceptance scenario below.
+- **Remaining:** furniture sizes, the hinge flag and the overlap check; pinch zoom and accessibility; splitting `app.js` and adding Playwright tests.
+
 - `plan.schemaVersion` and migrations (M-1, API-1).
 - Walls become their own entities with *existing / new / demolish* status and a *load-bearing yes/no/unknown* flag. Wall annotations survive a resize (ED-16, TEK-M3).
 - **"This is today's layout"** saves a baseline. The check compares against it to find removed walls, new windows, new bathrooms and change of use (TEK-16).
