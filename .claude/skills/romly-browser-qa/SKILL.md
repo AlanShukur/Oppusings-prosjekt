@@ -47,6 +47,20 @@ Run this after moving or changing studio UI code. It opens every dialog from its
 
 To download a file, it replaces `URL.createObjectURL` for one call, as `walls.mjs` does. "Importer prosjektfil" builds a detached `<input type=file>`, so the script catches it with a one-time `document.createElement` hook and puts it in the page for `setFiles`. File-chooser interception (`Page.setInterceptFileChooserDialog`) stops any real chooser from opening.
 
+## Readability check
+
+```bash
+node .claude/skills/romly-browser-qa/a11y.mjs <base-url>
+```
+
+Run this after any CSS change or new UI text. At desktop (1366), tablet (900) and phone (390) widths it checks the projects dialog, Grunnlag, the studio (each phone tab), a selected element and the check dialog:
+- **Size:** every visible text is at least 11px.
+- **Contrast:** every visible text meets WCAG AA against what is actually behind it (layers blended). The threshold is 4.5:1, or 3:1 for text of 24px, or 18.66px bold.
+- **Overlap:** no text overlaps other text or a control it isn't part of.
+- **Sideways scrolling:** none.
+
+It skips disabled controls (exempt from contrast rules), SVG text in the drawing, and the toast. A text-size change can push neighbours into each other without clipping anything; the overlap test catches that. Boxes are cut to their scrolling ancestors first, so text scrolled out of a panel doesn't count.
+
 ## Furniture check
 
 ```bash
