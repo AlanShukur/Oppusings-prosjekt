@@ -107,7 +107,8 @@ Waiting on you:
   - the acceptance scenario below;
   - `app.js` split into a short entry file and 18 modules, with the project brief as a pure, tested module and a browser check that opens every dialog (`dialogs.mjs`);
   - 16 pieces of furniture with real, editable sizes (plan format 4), a door hinge-side flag, and an overlap check for walls, door swings and other furniture. A room you furnish drops its automatic furniture (part of ED-13).
-- **Remaining:** pinch zoom and accessibility; Playwright tests for pointer and touch.
+  - larger text and better contrast (ED-7): no text under 11px and every text colour at WCAG AA, checked by `a11y.mjs`. Before, 56% of the studio's text failed AA and the smallest was 6px.
+- **Remaining:** pinch zoom and keyboard access to the drawing (REG-1); Playwright tests for pointer and touch.
 
 - `plan.schemaVersion` and migrations (M-1, API-1).
 - Walls become their own entities with *existing / new / demolish* status and a *load-bearing yes/no/unknown* flag. Wall annotations survive a resize (ED-16, TEK-M3).

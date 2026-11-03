@@ -51,5 +51,6 @@ To look at the page or check it automatically, use the **romly-browser-qa** skil
 
 - **PowerShell:** call `npm.cmd`, not `npm`.
 - **Bash:** `npm` works as usual.
+- **`npm run build` fails with `syscall: 'rm'`** right after you stopped a dev or preview server: Windows is still releasing files in `dist/` or `public/studio/vendor/`. Run the build again; it has passed on the second try every time so far.
 - **Port already in use:** `--strictPort` makes the server fail instead of silently moving to another port. Stop the old server, or pick another port and pass that URL to QA.
 - **`ERR_UNSUPPORTED_ESM_URL_SCHEME`:** `node --import` needs a `file://` URL on Windows, not a path. `scripts/deploy-cloudflare.mjs` shows the pattern: `new URL(..., import.meta.url).href`.

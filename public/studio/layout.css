@@ -275,7 +275,7 @@ dialog[open] {
     min-width: 0;
     min-height: 38px;
     border-radius: 6px;
-    color: #777482;
+    color:#6c6976;
     font-size: 12px;
     font-weight: 500;
   }
@@ -356,7 +356,7 @@ dialog[open] {
   }
 
   .room-details small {
-    font-size: 10px;
+    font-size:11px;
   }
 
   .room-size {
@@ -450,7 +450,7 @@ dialog[open] {
   .project-actions .save-status {
     min-width: 0;
     margin-right: auto;
-    font-size: 9px;
+    font-size:11px;
   }
 
   .project-actions .button {
@@ -472,7 +472,7 @@ dialog[open] {
   }
 
   .workflow-step .step-copy strong {
-    font-size: 9px;
+    font-size:11px;
   }
 
   .workspace-tabs button {
@@ -527,7 +527,7 @@ dialog[open] {
   }
 
   .summary-stat > span {
-    font-size: 9px;
+    font-size:11px;
   }
 
   .dialog-header {
@@ -641,7 +641,7 @@ dialog[open] {
   }
 
   .main-nav .nav-link {
-    font-size: 9px;
+    font-size:11px;
   }
 
   .topbar-end {

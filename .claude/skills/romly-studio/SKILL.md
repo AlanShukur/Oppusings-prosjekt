@@ -110,6 +110,7 @@ Romly is a Norwegian renovation planner. The **studio** (`public/studio/`) is a 
   - Numbers use a decimal comma. Inputs are `type="text" inputmode="decimal"` and are parsed with `decimal()` from `format.js`.
   - Escape user text with `esc()` when building HTML strings.
 - **No sign-in.** Everything is stored on the device. The server code is kept but unused by the studio, so don't delete it: `lib/projects-api.mjs`, `app/api/`, `app/chatgpt-auth.ts`, `db/` and `drizzle/`. Avoid the word "konto" in UI text; say "på denne enheten".
+- **Readable text:** no studio text under 11px, and every text colour at WCAG AA (4.5:1) against its real background. Mid-grey and lilac text on white needs a lightness of about 40% or less; on tinted pills and panels, check the pair. Use `var(--purple-dark)` for purple text, not `var(--purple)`. Run `a11y.mjs` (**romly-browser-qa**) after CSS changes.
 - **Messages:** use `toast(message)`. The toast is a manual popover, so it shows above open dialogs. Don't move it back to a plain fixed element.
 - **Hidden elements:** CSS `display` overrides the `hidden` attribute. Follow `.item-properties [hidden]{display:none!important}` in `studio-extra.css` when you add a hidden section.
 - **Keyboard shortcuts:** they live in the `keydown` handler in `bindTools()` in `tools.js`; list a new one in `openShortcuts` there too. It ignores keys while a dialog is open or focus is in a text field. Single-key actions such as Delete and the arrows also skip focused buttons and links (`onControl`). Keep both guards for new shortcuts.

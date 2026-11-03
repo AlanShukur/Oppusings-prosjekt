@@ -9,7 +9,7 @@ Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it sho
   - landing and legal pages;
   - crash reports;
   - staging and production deploys.
-- **Staging:** https://romly-staging.romly.workers.dev. It deploys automatically on every merge to `main`. Last checked 2026-11-03: smoke 13/13, dialogs 35/35, plan-version 10/10, walls 17/17 and baseline 15/15 on `main` at `38ed7aa` (after PR #10).
+- **Staging:** https://romly-staging.romly.workers.dev. It deploys automatically on every merge to `main`. Last checked 2026-11-04: smoke 13/13, dialogs 35/35, furniture 16/16, plan-version 10/10, walls 17/17 and baseline 15/15 on `main` at `029bce0` (after PR #11).
 - **Production:** https://romly.romly.workers.dev has not been deployed yet.
 - **Sprint 2 in progress** (`docs/SPRINTPLAN.md`).
   - Step 1 is merged (PR #6): the plan format version and migrations.
@@ -17,9 +17,12 @@ Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it sho
   - Step 3 is merged (PR #8). With it, the sprint's acceptance scenario works on staging: TEK17 check rules for marked walls, and a wall list in the project brief.
   - Step 4 is merged (PR #9): the "Dagens planløsning" baseline (`PLAN_VERSION = 3`) and the comparison in `plan-diff.js`.
   - The `app.js` split is merged (PR #10): an entry file plus 18 modules.
-  - Step 5 is in an open PR (branch `sprint-2-furniture`): furniture with real sizes, the door hinge flag and the overlap check (`PLAN_VERSION = 4`).
-  - Next steps: pinch zoom and accessibility, then Playwright tests, which finish Sprint 2.
-- **Tests:** 180 unit tests (`npm test`). Browser checks in `romly-browser-qa`: `smoke.mjs`, `dialogs.mjs`, `furniture.mjs`, `plan-version.mjs`, `walls.mjs` and `baseline.mjs`.
+  - Step 5 is merged (PR #11): furniture with real sizes, the door hinge flag and the overlap check (`PLAN_VERSION = 4`).
+  - Step 6 is split into two PRs.
+    - **6a (text and contrast)** is in an open PR (branch `sprint-2-access`).
+    - **6b (pinch zoom and keyboard access to the drawing)** comes next, on its own branch after 6a merges.
+  - After that come the Playwright tests, which finish Sprint 2. Ask the user whether to run the existing CDP browser checks in CI instead of adding Playwright.
+- **Tests:** 180 unit tests (`npm test`). Browser checks in `romly-browser-qa`: `smoke.mjs`, `dialogs.mjs`, `furniture.mjs`, `a11y.mjs`, `plan-version.mjs`, `walls.mjs` and `baseline.mjs`.
 
 ## Decisions
 
@@ -51,19 +54,37 @@ Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it sho
   - **Overlap check:** flags furniture through a standing wall, in a door's sweep, or overlapping other furniture. Touching is fine, and so are a chair under a table and a plant on anything. The result is an outline and a message, never a block.
   - **Doors:** `mirrored` moves the hinge to the other end of the opening. «Slå andre veien» keeps the hinge end, and «Bytt hengselside» moves it. Left/right labels were avoided because Norwegian conventions for which side is "left" differ.
   - **Automatic furniture:** a furnished room drops its automatic furniture, but kitchen and bathroom fittings stay.
+- **Readable text (2026-11-04):**
+  - **The rule:** no studio text under 11px; every text colour at WCAG AA against its real background; `a11y.mjs` checks both at three widths.
+  - **How the fix was made:** a one-off script raised small sizes and darkened failing colours in HSL, keeping each colour's hue so the look stays the same. Three tinted pills were fixed by hand.
+  - **Phone header:** the save status gets its own line.
 - **Language:** UI text is Norwegian bokmål; docs for the team are in English, except `README.md` and `docs/LEGAL-REVIEW.md`.
 
 ## Waiting on the user
 
-- **Merge the step 5 PR** (branch `sprint-2-furniture`). After merging, verify the staging deploy and run all six browser checks against staging (`smoke`, `dialogs`, `furniture`, `plan-version`, `walls`, `baseline`).
+- **Merge the step 6a PR** (branch `sprint-2-access`). After merging, verify the staging deploy and run all seven browser checks against staging (`smoke`, `dialogs`, `furniture`, `a11y`, `plan-version`, `walls`, `baseline`), then start 6b.
 - **Production deploy:** run *Actions → Deploy → Run workflow → production* as a new run. Optionally add a required reviewer on the `production` environment.
 - **Legal:** fill in `lib/company.ts` and get the legal review (`docs/LEGAL-REVIEW.md`). The legal pages show a draft notice until `legalReviewed` is true.
 - **Analytics:** decide whether to add any.
 - **Old OpenAI Sites copy:** decide whether to keep or retire it.
-- **Stale branches:** optionally delete `sprint-0-editor-tek17`, `sprint-1-local-first`, `docs-deploy-subdomain`, `fix-landing-links`, `deploy-guard`, `claude-skills-memory`, `sprint-2-plan-model`, `sprint-2-walls`, `sprint-2-wall-checks` and `sprint-2-baseline` and `sprint-2-split-app`.
+- **Stale branches:** optionally delete `sprint-0-editor-tek17`, `sprint-1-local-first`, `docs-deploy-subdomain`, `fix-landing-links`, `deploy-guard`, `claude-skills-memory`, `sprint-2-plan-model`, `sprint-2-walls`, `sprint-2-wall-checks` and `sprint-2-baseline`, `sprint-2-split-app` and `sprint-2-furniture`.
 - **Open request:** fixing what /usage flagged and moving search agents to a cheaper model needs the /usage output first. Show each change before making it.
 
 ## Task log (newest first)
+
+- **2026-11-04:** Sprint 2, step 6a (text and contrast), on branch `sprint-2-access`. Committed and PR opened.
+  - **Audit first:** 56% of desktop text (158 of 282) failed WCAG AA, and 200 texts were under 12px, down to 6px.
+  - **CSS transform (one-off script):**
+    - 258 `font-size` values under 11px raised to 11px;
+    - 235 text colours darkened to about 5.3:1 against white, same hue;
+    - `color:var(--purple)` changed to `var(--purple-dark)`;
+    - three tinted pills fixed by hand.
+  - **Phone fix:** the 11px save status ran into the Eksporter button, so the header row now wraps.
+  - **Regression check:** new `a11y.mjs` (size, contrast, overlapping text, sideways scrolling; 71 checks over 3 widths). The overlap test was confirmed to catch the header bug with the fix removed.
+  - **Results:** all other browser checks pass; 180 of 180 unit tests pass.
+  - **Skills:** browser-QA (`a11y.mjs`), studio (the readable-text rule), ship.
+
+- **2026-11-04:** PR #11 (step 5: furniture, hinge, overlap) merged. Deploy run 41736013645 succeeded. On staging: smoke 13/13, dialogs 35/35, furniture 16/16, plan-version 10/10, walls 17/17 and baseline 15/15. Local `main` is at `029bce0`. These memory edits are uncommitted on `main`; they go in with the next branch.
 
 - **2026-11-04:** Sprint 2, step 5, on branch `sprint-2-furniture`. Committed and PR opened.
   - **Furniture:**
