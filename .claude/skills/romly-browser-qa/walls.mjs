@@ -42,6 +42,22 @@ try {
   check('the legend appears once a wall is marked', await evaluate(`!document.querySelector('#wall-legend').hidden`));
   await shot('walls-1-marked');
 
+  // The TEK17 check reports the wall, and "Vis i tegningen" goes back to it.
+  await evaluate(`document.querySelector('#check-btn').click()`);
+  await until(`document.querySelectorAll('#check-results .check-item').length > 0`, 'check results', 10000);
+  const wallResult = `[...document.querySelectorAll('#check-results .check-item')].find(el => el.textContent.includes('Riving av bærende vegg'))`;
+  const reported = await evaluate(`(() => { const item = ${wallResult}; return item ? {status: item.dataset.status, link: !!item.querySelector('[data-show-wall]')} : null; })()`);
+  check('the check says demolishing the load-bearing wall needs an application', reported?.status === 'soknad' && reported.link, JSON.stringify(reported));
+  // The project brief (downloaded from the check dialog) lists the wall change; the download is caught as a Blob.
+  const brief = await evaluate(`new Promise(resolve => { const original = URL.createObjectURL; URL.createObjectURL = blob => { URL.createObjectURL = original; blob.text().then(resolve); return original.call(URL, blob); }; document.querySelector('#download-review').click(); })`);
+  const wallLine = brief.match(/ENDRINGER I VEGGER\n[^\n]*/)?.[0] || '';
+  check('the project brief lists the wall change', /- Vegg mellom .+ \(3,2 m\): rives, bærende: ja/.test(wallLine), wallLine);
+  await evaluate(`${wallResult}.scrollIntoView({block: 'center'})`);
+  await shot('walls-check');
+  await evaluate(`${wallResult}.querySelector('[data-show-wall]').click()`);
+  await until(`!document.querySelector('#app-dialog').open && !document.querySelector('#wall-properties').hidden`, 'back at the wall', 10000)
+    .then(() => check('"Vis i tegningen" selects that wall', true), e => check('"Vis i tegningen" selects that wall', false, e.message));
+
   // Delete must not remove a room while a wall is selected; Escape clears the selection.
   const roomsBefore = await evaluate(`romly.editor.getState().rooms.length`);
   await send('Input.dispatchKeyEvent', {type: 'keyDown', key: 'Delete', code: 'Delete', windowsVirtualKeyCode: 46});

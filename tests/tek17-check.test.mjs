@@ -99,7 +99,63 @@ test('results are honest: sourced, never "godkjent", and the disclaimer names th
     if (/^(TEK17|SAK10|pbl)/.test(result.ref)) assert.match(result.url || '', /^https:\/\/(www\.dibk\.no|lovdata\.no)\//, result.ref);
   }
   assert.match(DISCLAIMER, /tiltakshaver/);
-  assert.equal(RULESET.version, '2026-11-01');
+  assert.equal(RULESET.version, '2026-11-03');
   assert.equal(classifyRoom({type: 'office'}), 'stay');
   assert.equal(classifyRoom({type: 'storage'}), 'no');
+});
+
+// Walls marked in the drawing (Sprint 2): status and load-bearing from plan.walls.
+const pair = (walls, items = []) => ({variant: 'custom', rooms: [room('a', 0, 0, 200, 200, 'living'), room('b', 200, 0, 200, 200, 'bedroom')], items, walls});
+const SHARED = 'a:right|b:left';
+const answered = {measures: {bearingWall: 'nei', facade: false, useChange: 'nei'}};
+const titled = (report, title) => report.results.filter(result => result.title === title);
+
+test('demolishing a wall marked load-bearing needs an application and points at that wall', () => {
+  const report = evaluatePlan(pair([{key: SHARED, status: 'demolish', loadBearing: 'yes'}]), {});
+  const [result] = titled(report, 'Riving av bærende vegg');
+  assert.equal(result.status, 'soknad');
+  assert.equal(result.wallKey, SHARED);
+  assert.match(result.message, /mellom «a» og «b»/);
+  assert.equal(titled(report, 'Bærende konstruksjon').length, 0, 'the per-wall result is enough');
+  assert.equal(titled(report, 'Riving av vegger').length, 0, 'the drawing answers the wall question');
+});
+
+test('a wall marked for demolition without a load-bearing answer asks for it', () => {
+  const [result] = titled(evaluatePlan(pair([{key: SHARED, status: 'demolish', loadBearing: 'unknown'}]), {}), 'Er veggen bærende?');
+  assert.equal(result.status, 'ukjent');
+  assert.equal(result.wallKey, SHARED);
+});
+
+test('the questionnaire cannot hide a load-bearing wall marked in the drawing', () => {
+  const report = evaluatePlan(pair([{key: SHARED, status: 'demolish', loadBearing: 'yes'}]), answered);
+  assert.equal(titled(report, 'Riving av bærende vegg')[0].status, 'soknad');
+  assert.equal(titled(report, 'Ikke-bærende vegger').length, 0);
+});
+
+test('only non-load-bearing walls removed and everything answered gives the exemption, plus the merge note', () => {
+  const report = evaluatePlan(pair([{key: SHARED, status: 'demolish', loadBearing: 'no'}]), answered);
+  assert.equal(titled(report, 'Ikke-bærende vegger')[0].status, 'ok');
+  const [merge] = titled(report, 'Rom slås sammen');
+  assert.equal(merge.status, 'info');
+  assert.match(merge.message, /^Når veggen mellom «a» og «b» rives/);
+});
+
+test('removing an exterior wall is flagged as a facade change and blocks the exemption', () => {
+  const report = evaluatePlan(pair([{key: 'a:top', status: 'demolish', loadBearing: 'no'}]), answered);
+  assert.equal(titled(report, 'Riving av yttervegg')[0].status, 'advarsel');
+  assert.equal(titled(report, 'Ikke-bærende vegger').length, 0);
+  assert.equal(titled(report, 'Rom slås sammen').length, 0);
+});
+
+test('a new load-bearing wall is a warning, not an exemption', () => {
+  const report = evaluatePlan(pair([{key: SHARED, status: 'new', loadBearing: 'yes'}]), answered);
+  assert.equal(titled(report, 'Ny bærende vegg')[0].status, 'advarsel');
+  assert.equal(titled(report, 'Ikke-bærende vegger').length, 0);
+});
+
+test('a wall drawn in two pieces is reported once, and unchanged walls report nothing', () => {
+  const split = [{id: 'item-split', type: 'wall', x: 0, y: 100, x2: 150, y2: 100, rotation: 0}];
+  const report = evaluatePlan(pair([{key: 'a:left', status: 'demolish', loadBearing: 'yes'}, {key: SHARED, status: 'existing', loadBearing: 'yes'}], split), {});
+  assert.equal(titled(report, 'Riving av bærende vegg').length, 1);
+  assert.equal(report.results.filter(result => result.wallKey === SHARED).length, 0);
 });

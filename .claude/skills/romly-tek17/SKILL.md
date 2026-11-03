@@ -37,11 +37,15 @@ add(ruleId, ref, title, status, message, {roomId})
 **Last two arguments:**
 - **`message`:** a full Norwegian sentence that names the room as «…». Format numbers with `fmt()`, which gives nb-NO decimal commas.
 - **`roomId`:** links the result to a room, which enables "Vis i tegningen" in the UI.
+- **`wallKey`:** links the result to a wall instead; "Vis i tegningen" then selects that wall. A wall question (`ukjent`) with a `wallKey` is answered on the wall, so it gets no "Legg inn opplysninger" button.
 
 ## Inputs
 
 - **From the plan:** `rooms`, plus `walls` and `openings` derived through `scene-geometry.js`. Use `windowsOf`, `doorsOf` and `exteriorIsUncertain` rather than re-deriving them.
 - **Per room:** `ceilingHeight` and `previousUse`. Per opening: `width`, `height`, `sillHeight`, `entrance` and `escape`.
+- **Per wall:** `status` (existing/new/demolish) and `loadBearing` (unknown/yes/no) on every wall from `deriveWalls`, read from `plan.walls`.
+  - Group walls by `wall.key`, so a wall drawn in several pieces is reported once.
+  - The drawing may only make the questionnaire's answer stricter. For example, `bearingWall` is the stricter of `measures.bearingWall` and what the demolished walls say.
 - **Per project:** `project.building` (for example `lightTransmission`, `permitBefore2011`) and `project.measures` (for example `useChange`).
 - **A new input needs all of these:**
   1. A question in `FACT_QUESTIONS` in `app.js`, or a field in the room or item inspector.
@@ -55,7 +59,8 @@ add(ruleId, ref, title, status, message, {roomId})
 1. **Verify the source before writing code.** Fetch the `SOURCES` URL (dibk.no veiledning or lovdata.no) and read the current text. Don't rely on memory: DiBK revises the guidance.
 2. **Comment the code.** Above the check, write a short comment naming the paragraph and the exact preaccepted level, like the existing ones.
 3. **Update the ruleset.**
-   - Set `RULESET.version` and `RULESET.verified` to today. `DISCLAIMER` and the downloaded report show the verified date, and old reports stay tied to the ruleset they were made with.
+   - Set `RULESET.version` to today whenever the rules change; the downloaded report records it, so old reports stay tied to the ruleset they were made with. Update the test that pins it.
+   - Change `RULESET.verified` only after re-checking every source. Users see it as "regelverk kontrollert" in `DISCLAIMER`, the check dialog and the report. Checking one page for a new rule is not enough: record that date in the rule's comment instead.
    - If the rule refers to a section not yet listed, add it to `SOURCES`.
 4. **Existing buildings:** requirements apply only to the parts of the building the change affects (pbl § 31-2). Respect the relief in § 1-2 åttende ledd: `exempt128`, which covers a change of use from tilleggsdel to hoveddel in homes applied for before 1 July 2011.
 5. **Wording:**

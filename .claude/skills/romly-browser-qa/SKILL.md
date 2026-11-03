@@ -53,7 +53,10 @@ Run this after changing walls, the 2D editor's click handling or the inspector. 
 - **The panel and drawing:** the "Vegg" panel opens; "Rives" and "Bærende" give the dashed red line, the right hint and the legend.
 - **Keys:** Delete removes nothing and Escape closes the panel.
 - **Persistence and 3D:** the note survives a reload, and 3D opens.
+- **The TEK17 check:** "Riving av bærende vegg" is reported as needing an application, the downloaded project brief lists the wall under "ENDRINGER I VEGGER", and "Vis i tegningen" selects the wall again.
 - **Resetting:** going back to the default stores nothing.
+
+To read a downloaded file in a check, replace `URL.createObjectURL` for one call and read the Blob's text; `walls.mjs` does this for the brief.
 
 On a phone the panel is under the *Egenskaper* tab (`[data-workspace-panel="properties"]`), like the room and element panels.
 
