@@ -9,16 +9,17 @@ Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it sho
   - landing and legal pages;
   - crash reports;
   - staging and production deploys.
-- **Staging:** https://romly-staging.romly.workers.dev. It deploys automatically on every merge to `main`. Last checked 2026-11-03: smoke 13/13, plan-version 10/10, walls 17/17 and baseline 15/15 on `main` at `fcb287c` (after PR #9).
+- **Staging:** https://romly-staging.romly.workers.dev. It deploys automatically on every merge to `main`. Last checked 2026-11-03: smoke 13/13, dialogs 35/35, plan-version 10/10, walls 17/17 and baseline 15/15 on `main` at `38ed7aa` (after PR #10).
 - **Production:** https://romly.romly.workers.dev has not been deployed yet.
 - **Sprint 2 in progress** (`docs/SPRINTPLAN.md`).
   - Step 1 is merged (PR #6): the plan format version and migrations.
   - Step 2 is merged (PR #7): wall notes (existing/new/demolish, load-bearing yes/no/unknown), the "Vegg" panel, 2D and 3D styling and the legend. `PLAN_VERSION = 2`.
   - Step 3 is merged (PR #8). With it, the sprint's acceptance scenario works on staging: TEK17 check rules for marked walls, and a wall list in the project brief.
   - Step 4 is merged (PR #9): the "Dagens planløsning" baseline (`PLAN_VERSION = 3`) and the comparison in `plan-diff.js`.
-  - The `app.js` split is in an open PR (branch `sprint-2-split-app`).
-  - Next steps: the rest of Sprint 2 in `docs/SPRINTPLAN.md` (furniture sizes, hinge and overlap; pinch zoom and accessibility; Playwright).
-- **Tests:** 169 unit tests (`npm test`). Browser checks in `romly-browser-qa`: `smoke.mjs`, `dialogs.mjs`, `plan-version.mjs`, `walls.mjs` and `baseline.mjs`.
+  - The `app.js` split is merged (PR #10): an entry file plus 18 modules.
+  - Step 5 is in an open PR (branch `sprint-2-furniture`): furniture with real sizes, the door hinge flag and the overlap check (`PLAN_VERSION = 4`).
+  - Next steps: pinch zoom and accessibility, then Playwright tests, which finish Sprint 2.
+- **Tests:** 180 unit tests (`npm test`). Browser checks in `romly-browser-qa`: `smoke.mjs`, `dialogs.mjs`, `furniture.mjs`, `plan-version.mjs`, `walls.mjs` and `baseline.mjs`.
 
 ## Decisions
 
@@ -45,19 +46,39 @@ Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it sho
   - **Startup:** modules attach handlers in `bind…()` functions that `app.js` calls in order, and nothing runs across modules at import time, so the import cycles are safe.
   - **Lint:** ESLint runs `no-undef` and unused-variable errors on `public/studio/**`.
   - **Check script:** `npm run check` checks the whole folder (`scripts/check-syntax.mjs`).
+- **Furniture (2026-11-03):** a catalogue of 16 pieces in `furniture.js`, each item storing its own `width` and `depth` in metres (0,2–4 m).
+  - **Migration 3→4:** older pieces keep the size they were drawn at, so nobody's drawing changes.
+  - **Overlap check:** flags furniture through a standing wall, in a door's sweep, or overlapping other furniture. Touching is fine, and so are a chair under a table and a plant on anything. The result is an outline and a message, never a block.
+  - **Doors:** `mirrored` moves the hinge to the other end of the opening. «Slå andre veien» keeps the hinge end, and «Bytt hengselside» moves it. Left/right labels were avoided because Norwegian conventions for which side is "left" differ.
+  - **Automatic furniture:** a furnished room drops its automatic furniture, but kitchen and bathroom fittings stay.
 - **Language:** UI text is Norwegian bokmål; docs for the team are in English, except `README.md` and `docs/LEGAL-REVIEW.md`.
 
 ## Waiting on the user
 
-- **Merge the `app.js` split PR** (branch `sprint-2-split-app`). After merging, verify the staging deploy and run all five browser checks (`smoke.mjs`, `dialogs.mjs`, `plan-version.mjs`, `walls.mjs`, `baseline.mjs`) against staging.
+- **Merge the step 5 PR** (branch `sprint-2-furniture`). After merging, verify the staging deploy and run all six browser checks against staging (`smoke`, `dialogs`, `furniture`, `plan-version`, `walls`, `baseline`).
 - **Production deploy:** run *Actions → Deploy → Run workflow → production* as a new run. Optionally add a required reviewer on the `production` environment.
 - **Legal:** fill in `lib/company.ts` and get the legal review (`docs/LEGAL-REVIEW.md`). The legal pages show a draft notice until `legalReviewed` is true.
 - **Analytics:** decide whether to add any.
 - **Old OpenAI Sites copy:** decide whether to keep or retire it.
-- **Stale branches:** optionally delete `sprint-0-editor-tek17`, `sprint-1-local-first`, `docs-deploy-subdomain`, `fix-landing-links`, `deploy-guard`, `claude-skills-memory`, `sprint-2-plan-model`, `sprint-2-walls`, `sprint-2-wall-checks` and `sprint-2-baseline` (and `sprint-2-split-app` once merged).
+- **Stale branches:** optionally delete `sprint-0-editor-tek17`, `sprint-1-local-first`, `docs-deploy-subdomain`, `fix-landing-links`, `deploy-guard`, `claude-skills-memory`, `sprint-2-plan-model`, `sprint-2-walls`, `sprint-2-wall-checks` and `sprint-2-baseline` and `sprint-2-split-app`.
 - **Open request:** fixing what /usage flagged and moving search agents to a cheaper model needs the /usage output first. Show each change before making it.
 
 ## Task log (newest first)
+
+- **2026-11-04:** Sprint 2, step 5, on branch `sprint-2-furniture`. Committed and PR opened.
+  - **Furniture:**
+    - 16 pieces in `furniture.js`, grouped as Stue, Soverom, Spise og arbeid and Vaskerom, with real sizes.
+    - Width and depth are editable in Egenskaper.
+    - The Interiør list is built from the catalogue (two columns on phones).
+    - New 2D symbols and new 3D shapes (low table, cabinet, wardrobe, round table, chair, washing machine).
+  - **Format 4:** `PLAN_VERSION` is 4; migration 3→4 keeps old pieces' drawn sizes, also in the baseline. The server allows the new types (`FURNITURE_TYPES`, kept equal by a test) and the `width`/`depth`/`mirrored` fields.
+  - **Doors:** «Bytt hengselside» and «Slå andre veien»; 3D's `doorSwing` honours `mirrored`.
+  - **Overlap check:** `furnitureConflicts` in `scene-geometry.js`, shown as a red outline plus a message in Egenskaper.
+  - **Automatic furniture:** a room you furnish drops its automatic furniture. A screenshot showed it next to the user's own pieces.
+  - **Tests:** 11 new unit tests (`tests/furniture.test.mjs`); 180 of 180 pass. Browser checks: new `furniture.mjs` 16/16, dialogs 35/35, smoke 13/13, plan-version 10/10, walls 17/17, baseline 15/15, phone 4/4.
+  - **Skills:** studio (the furniture model and what changes together), browser-QA (`furniture.mjs`), run (3D is bundled at dev-server start, so restart after 3D changes), ship.
+
+- **2026-11-03:** PR #10 (the `app.js` split) merged. Deploy run 41732616837 succeeded, and staging serves the new 29-line `app.js` and the modules. On staging: smoke 13/13, dialogs 35/35, plan-version 10/10, walls 17/17 and baseline 15/15. Local `main` is at `38ed7aa`. These memory edits are uncommitted on `main`; they go in with the next branch.
 
 - **2026-11-03:** Split `app.js` into modules, on branch `sprint-2-split-app`. Committed and PR opened.
   - **How:** the code moved without rewriting, using a one-off script in the scratchpad. The script copied exact line ranges from the committed `app.js`, checked that every line landed once, renamed only the shared state to `studio.…`, and worked out the imports and exports.

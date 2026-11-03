@@ -1,4 +1,6 @@
 /** Geometry shared by the 2D editor and the 3D viewer. Coordinates are 50 units/m. */
+import { FURNITURE, furnitureSize, furnitureOutline, placePolygon } from './furniture.js';
+
 export const PLAN_UNITS_PER_METER = 50;
 /** Default opening widths in plan units when an item has no explicit width (m). */
 export const DEFAULT_OPENING_WIDTH = {door: 42, window: 70};
@@ -150,15 +152,29 @@ export function projectToWall(wall, point) {
   return {x, y, t, distance: Math.hypot(point.x - x, point.y - y)};
 }
 
-/** Door hinge side and swing in wall-local terms, matching the 2D symbol (hinge at -u, leaf along local +y). */
+/**
+ * Door hinge side and swing in wall-local terms, matching the 2D symbol: hinge at local -x (or +x when the
+ * door is `mirrored`), leaf along local +y.
+ */
 function doorSwing(wall, item) {
-  if (!Number.isFinite(item.rotation)) return {hinge: 'start', swing: -1};
+  const mirror = result => item.mirrored ? {...result, hinge: result.hinge === 'start' ? 'end' : 'start'} : result;
+  if (!Number.isFinite(item.rotation)) return mirror({hinge: 'start', swing: -1});
   const r = item.rotation * Math.PI / 180, ux = Math.cos(r), uy = Math.sin(r);
   const dx = (wall.x2 - wall.x) / wall.length, dy = (wall.y2 - wall.y) / wall.length;
   const along = ux * dx + uy * dy;
-  if (Math.abs(along) < 0.9) return {hinge: 'start', swing: -1};
+  if (Math.abs(along) < 0.9) return mirror({hinge: 'start', swing: -1});
   const side = -Math.sin(r) * -dy + Math.cos(r) * dx;
-  return {hinge: along > 0 ? 'start' : 'end', swing: side >= 0 ? 1 : -1};
+  return mirror({hinge: along > 0 ? 'start' : 'end', swing: side >= 0 ? 1 : -1});
+}
+
+/** The floor a door leaf sweeps, as a polygon: a quarter circle around the hinge, on the side the door opens to. */
+export function doorSweep(item) {
+  const span = openingWidthUnits(item), hinge = item.mirrored ? span / 2 : -span / 2, toward = item.mirrored ? Math.PI : 0;
+  const arc = Array.from({length: 7}, (_, i) => {
+    const angle = toward + (item.mirrored ? -1 : 1) * i * Math.PI / 12;
+    return [hinge + Math.cos(angle) * span, Math.sin(angle) * span];
+  });
+  return placePolygon([[hinge, 0], ...arc], item);
 }
 
 function openingOnWall(wall, item, synthetic = false) {
@@ -184,6 +200,71 @@ export function assignOpenings(state = {}, walls = deriveWalls(state)) {
       ? {item, wall: candidate.wall, projection: candidate.projection, exterior: candidate.wall.exterior, roomIds: candidate.wall.roomIds, offWall: false}
       : {item, wall: null, projection: null, exterior: false, roomIds: [], offWall: true};
   });
+}
+
+/**
+ * True when two convex polygons share area (separating-axis test). A two-point polygon is a wall line; it adds
+ * its own direction as an axis, so a piece just past the end of a wall doesn't count as crossing it.
+ */
+function polygonsOverlap(a, b) {
+  const axes = [];
+  for (const polygon of [a, b]) {
+    for (let i = 0; i < polygon.length; i++) {
+      const p = polygon[i], q = polygon[(i + 1) % polygon.length];
+      axes.push([q.y - p.y, p.x - q.x]);
+      if (polygon.length === 2) axes.push([q.x - p.x, q.y - p.y]);
+    }
+  }
+  return axes.every(([nx, ny]) => {
+    if (!nx && !ny) return true;
+    const pa = a.map(point => point.x * nx + point.y * ny), pb = b.map(point => point.x * nx + point.y * ny);
+    return Math.max(...pa) > Math.min(...pb) + EPS && Math.max(...pb) > Math.min(...pa) + EPS;
+  });
+}
+
+/** Rooms holding furniture the user placed. Their automatic furniture steps aside; kitchen and bathroom fittings stay. */
+export function furnishedRoomIds(state = {}) {
+  const ids = new Set();
+  for (const item of state.items || []) {
+    if (!FURNITURE[item.type]) continue;
+    const room = (state.rooms || []).find(room => item.x >= room.x && item.x <= room.x + room.w && item.y >= room.y && item.y <= room.y + room.h);
+    if (room) ids.add(room.id);
+  }
+  return ids;
+}
+const FIXTURES = new Set(['kitchen', 'island', 'bath', 'sink', 'toilet']);
+
+// Pieces that may share floor: a chair pushed under a table, and a plant on or beside any furniture.
+const TABLES = new Set(['table', 'round-table', 'desk', 'low-table']);
+const sharesFloor = (a, b) => a === 'plant' || b === 'plant' || (a === 'chair' && TABLES.has(b)) || (b === 'chair' && TABLES.has(a));
+
+/**
+ * Furniture that crosses a wall, stands where a door swings, or overlaps other furniture.
+ * Returns a Map from item id to a list of {kind: 'wall' | 'door' | 'furniture', id}. A door lists the furniture in
+ * its way. Pieces that only touch are fine, and so is crossing a wall marked for demolition.
+ */
+export function furnitureConflicts(state = {}, walls = deriveWalls(state)) {
+  const conflicts = new Map();
+  const add = (id, entry) => { if (!conflicts.has(id)) conflicts.set(id, []); conflicts.get(id).push(entry); };
+  const pieces = (state.items || []).filter(item => FURNITURE[item.type]).map(item => ({item, kind: FURNITURE[item.type].kind, outline: furnitureOutline(item, 1)}));
+  if (!pieces.length) return conflicts;
+  const standing = walls.filter(wall => wall.status !== 'demolish').map(wall => [{x: wall.x, y: wall.y}, {x: wall.x2, y: wall.y2}]);
+  const doors = assignOpenings(state, walls).filter(entry => entry.item.type === 'door' && !entry.offWall).map(entry => ({id: entry.item.id, sweep: doorSweep(entry.item)}));
+  for (const piece of pieces) {
+    if (standing.some(line => polygonsOverlap(piece.outline, line))) add(piece.item.id, {kind: 'wall'});
+    for (const door of doors) {
+      if (!polygonsOverlap(piece.outline, door.sweep)) continue;
+      add(piece.item.id, {kind: 'door', id: door.id});
+      add(door.id, {kind: 'furniture', id: piece.item.id});
+    }
+  }
+  for (let i = 0; i < pieces.length; i++) for (let j = i + 1; j < pieces.length; j++) {
+    const a = pieces[i], b = pieces[j];
+    if (sharesFloor(a.kind, b.kind) || !polygonsOverlap(a.outline, b.outline)) continue;
+    add(a.item.id, {kind: 'furniture', id: b.item.id});
+    add(b.item.id, {kind: 'furniture', id: a.item.id});
+  }
+  return conflicts;
 }
 
 /** Subtract opening rectangles from a wall's elevation without a boolean-mesh library. */
@@ -273,10 +354,12 @@ export function deriveSceneSpec(state = {}) {
       if (opening) wall.openings.push(opening);
     }
   }
-  const furniture = defaultsForRooms(rooms);
+  const furnished = furnishedRoomIds(state);
+  const furniture = defaultsForRooms(rooms).filter(entry => !furnished.has(entry.roomId) || FIXTURES.has(entry.type));
   for (const item of state.items || []) {
-    if (!['plant', 'bed', 'table', 'sofa'].includes(item.type)) continue;
-    furniture.push({id: item.id, type: item.type, x: item.x / 50, z: item.y / 50, width: item.type === 'bed' ? 1.28 : item.type === 'plant' ? 0.42 : item.type === 'sofa' ? 1.68 : 1.32, depth: item.type === 'bed' ? 1.76 : item.type === 'plant' ? 0.42 : 0.88, rotation: finite(item.rotation), explicit: true});
+    const piece = FURNITURE[item.type];
+    if (!piece) continue;
+    furniture.push({id: item.id, type: piece.kind, height: piece.height, x: item.x / 50, z: item.y / 50, ...furnitureSize(item), rotation: finite(item.rotation), explicit: true});
   }
   return {
     bounds: getSceneBounds(rooms.length ? {...state, reference: null} : state),

@@ -1,6 +1,7 @@
 // Driving the editor: tools, zoom, 2D/3D, layers, adding rooms and the keyboard shortcuts.
 import { icon, $, toast, compactWorkspace, setWorkspacePanel } from './ui.js';
-import { singleLine } from './format.js';
+import { esc, singleLine } from './format.js';
+import { FURNITURE, FURNITURE_GROUPS } from './furniture.js';
 import { studio, editor } from './state.js';
 import { dialog, openDialog, closeDialog } from './dialog.js';
 import { rooms } from './inspector.js';
@@ -22,7 +23,13 @@ function openAddRoom(){
 }
 function openAddRoomDialog(){openDialog('Gi plass til et nytt rom','Legg til et rom i skissen. Plassering og tilkomst må vurderes.',`<label class="field">Romnavn<input class="input" id="new-room-name" value="Nytt soverom" maxlength="40"></label><div class="info-banner">${icon('info')}<p>Det nye rommet opprettes som en skissesone. Juster størrelse og kontroller at det passer i planløsningen.</p></div>`,`<button class="button secondary" id="cancel-room">Avbryt</button><button class="button primary" id="confirm-room">${icon('plus')} Legg til rom</button>`);$('#cancel-room').onclick=closeDialog;$('#confirm-room').onclick=()=>{const name=singleLine($('#new-room-name').value).trim()||'Nytt rom';editor.addItem('room');const last=rooms().at(-1);if(last){editor.updateRoom(last.id,{name});editor.selectRoom(last.id);}closeDialog();toast('Rommet er lagt til som en skissesone.');};}
 export function openShortcuts(){openDialog('Litt raskere fra tanke til tegning','Hurtigtaster i designstudioet.',`<div class="shortcut-grid">${[['Velg og flytt','V'],['Tegn rom','R'],['Tegn skillevegger','W'],['Plasser dør','D'],['Plasser vindu','F'],['Panorer','H'],['Zoom','Rullehjul'],['Roter eller snu valgt','Q / E'],['Dupliser valgt','Ctrl + D'],['Flytt valgt','Piltaster (Shift for større steg)'],['Angre','Ctrl + Z'],['Gjør om','Ctrl + Shift + Z'],['Fjern valgt element','Delete'],['Tilbake til velg','Esc']].map(([n,k])=>`<span>${n}</span><kbd>${k}</kbd>`).join('')}</div>`);}
+/** The Interiør tab: every piece in the catalogue, grouped by room, with its size. */
+function renderFurnitureList(){
+  const size=piece=>['plant','round-table'].includes(piece.kind)?`Ø ${Math.round(piece.width*100)} cm`:`${Math.round(piece.width*100)} × ${Math.round(piece.depth*100)} cm`;
+  $('#interior-tools').innerHTML=FURNITURE_GROUPS.map(group=>`<h3 class="furniture-group">${esc(group)}</h3>${Object.entries(FURNITURE).filter(([,piece])=>piece.group===group).map(([type,piece])=>`<button type="button" class="furniture-option" data-add="${type}">${icon(piece.icon)}<span><strong>${esc(piece.name)}</strong><small>${size(piece)}</small></span></button>`).join('')}`).join('');
+}
 export function bindTools(){
+  renderFurnitureList();
   document.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>{setTool(b.dataset.tool);if(compactWorkspace.matches)setWorkspacePanel('canvas');});
   document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{editor.addItem(b.dataset.add);if(compactWorkspace.matches)setWorkspacePanel('canvas');toast('Møbelet er lagt til. Dra det til ønsket plass.');});
   document.querySelectorAll('[data-tool-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-tool-tab]').forEach(x=>{x.classList.toggle('active',x===b);x.setAttribute('aria-selected',x===b);});$('#build-tools').classList.toggle('hidden',b.dataset.toolTab!=='build');$('#interior-tools').classList.toggle('hidden',b.dataset.toolTab!=='interior');setTool('select');});

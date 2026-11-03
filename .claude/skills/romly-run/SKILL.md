@@ -14,6 +14,7 @@ node scripts/run-framework.mjs dev --port 5174 --strictPort
 ```
 
 - `run-framework.mjs` first bundles three.js into `public/studio/vendor/` (`scripts/build-studio-assets.mjs`), then starts vinext. Without `--port` it uses 5173.
+- **3D is bundled once, at start.** `vendor/viewer3d.js` holds its own copy of `viewer3d.js` and everything it imports (`scene-geometry.js`, `furniture.js`). After changing any of those, restart the dev server, or 3D keeps running the old code while 2D already shows the new one.
 - Wait until it answers, without using `sleep`:
   ```bash
   for i in $(seq 1 60); do curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:5174/studio/index.html | grep -q 200 && echo ready && break; sleep 1; done
@@ -21,7 +22,7 @@ node scripts/run-framework.mjs dev --port 5174 --strictPort
 - Pages:
   - `/` is the landing page.
   - `/personvern` and `/vilkar` are the legal pages.
-  - `/studio/index.html` is the studio. It is static files from `public/studio/` with no build step, so a reload picks up edits.
+  - `/studio/index.html` is the studio. It is static files from `public/studio/` with no build step, so a reload picks up edits (except in 3D, see above).
 
 ## Production build (what Cloudflare runs)
 

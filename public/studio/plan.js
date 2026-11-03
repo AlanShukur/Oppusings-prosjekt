@@ -1,5 +1,6 @@
-import { deriveWalls, getSceneBounds, projectToWall, assignOpenings, openingWidthUnits, WALL_STATUSES, LOAD_BEARING } from './scene-geometry.js';
+import { deriveWalls, getSceneBounds, projectToWall, assignOpenings, openingWidthUnits, furnitureConflicts, furnishedRoomIds, WALL_STATUSES, LOAD_BEARING } from './scene-geometry.js';
 import { compareToBaseline } from './plan-diff.js';
+import { FURNITURE, FURNITURE_LIMITS, LEGACY_SIZES, isFurniture, furnitureSize } from './furniture.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const SCALE = 50;
@@ -76,11 +77,15 @@ export function upgradeExamplePlan(plan){
   return openings.length?{...plan,items:[...(plan.items||[]),...openings].slice(0,MAX_ITEMS)}:plan;
 }
 /** Version of the saved plan format. Bump it with a new MIGRATIONS entry whenever saved plans change shape, and keep PLAN_VERSION in lib/projects-api.mjs equal (a test checks). */
-export const PLAN_VERSION=3;
+export const PLAN_VERSION=4;
 // MIGRATIONS[n] turns a version n plan into version n+1. Version 0 is every plan saved before versioning.
 // 0 → 1: example plans get real doors and windows. 1 → 2: walls get saved notes (status, load-bearing); none exist yet.
 // 2 → 3: plans may carry a baseline ("Dagens planløsning"); none exists yet, so nothing changes.
-const MIGRATIONS=[upgradeExamplePlan,plan=>({...plan,walls:[]}),plan=>plan];
+// 3 → 4: furniture gets its own width and depth. Existing pieces keep the size they were drawn at, also in the baseline.
+const legacySized=items=>Array.isArray(items)?items.map(item=>LEGACY_SIZES[item?.type]&&!Number.isFinite(item.width)?{...item,width:LEGACY_SIZES[item.type][0],depth:LEGACY_SIZES[item.type][1]}:item):items;
+const MIGRATIONS=[upgradeExamplePlan,plan=>({...plan,walls:[]}),plan=>plan,plan=>({...plan,items:legacySized(plan.items),...(plan.baseline?{baseline:{...plan.baseline,items:legacySized(plan.baseline.items)}}:{})})];
+/** Every item type a plan can hold. */
+export const ITEM_TYPES=['window','door','wall',...Object.keys(FURNITURE)];
 const MAX_WALL_NOTES=300;
 /** Wall notes from storage or an import: valid, unique, and only those that differ from the default. */
 function cleanWallNotes(list){
@@ -117,6 +122,24 @@ function rect(x,y,w,h,fill='#fff',rx=2,stroke='#a5a39a',sw=1.2){return `<rect x=
 function plant(x,y,r=13){return `<g transform="translate(${x} ${y})"><circle r="${r}" fill="#d9ddcd" stroke="#a7b49d"/><path d="M0 7C-18-1-11-15 0-3C8-23 19-8 3 1C22-2 13 16 2 6C-8 21-18 9-2 2" fill="#9eaf92" stroke="#859b7b" stroke-width=".7"/></g>`;}
 function bed(x,y,w,h){return `<g>${rect(x-3,y-3,w+6,h+6,'#c6c9b9',2,'#a8ae9d')}${rect(x,y,w,h,'#f9f8f1',3,'#9ea494')}${rect(x+7,y+7,w/2-10,24,'#eeede5',4,'#bfc2b6')}${rect(x+w/2+3,y+7,w/2-10,24,'#eeede5',4,'#bfc2b6')}<path d="M${x} ${y+41}H${x+w}V${y+h}H${x}Z" fill="#d3d8c6" stroke="#aeb6a1"/><path d="M${x+6} ${y+47}H${x+w-6}" fill="none" stroke="#b4bda8"/>${rect(x-20,y+8,13,21,'#e5d7bd',1,'#b5aa96')}${rect(x+w+7,y+8,13,21,'#e5d7bd',1,'#b5aa96')}</g>`;}
 function doorway(x,y,orientation='right',size=38){let transform = orientation==='down'?`translate(${x} ${y}) rotate(90)`:`translate(${x} ${y})`;return `<g transform="${transform}"><path d="M0 0H${size}" stroke="#f3f0e8" stroke-width="9"/><path d="M0 0V${size}A${size} ${size} 0 0 0 ${size} 0" fill="none" stroke="#8f948e" stroke-width="1.2"/><path d="M0 0V${size}" stroke="#6f7770" stroke-width="2"/></g>`;}
+/** A piece of furniture drawn in a w × d box (plan units) centred on the item; the back is at the top (-y). */
+function furnitureSymbol(kind,w,d){
+  const x=-w/2,y=-d/2,line=(path,stroke)=>`<path d="${path}" fill="none" stroke="${stroke}"/>`;
+  switch(kind){
+    case 'bed':{const pillows=w>=55?2:1,gap=4,pw=(w-12-(pillows-1)*gap)/pillows;return rect(x,y,w,d,'#f9f8f1',3,'#9ea494')+Array.from({length:pillows},(_,i)=>rect(x+6+i*(pw+gap),y+5,pw,Math.min(22,d*.18),'#eeede5',4,'#bfc2b6')).join('')+`<path d="M${x} ${y+d*.3}H${x+w}V${y+d}H${x}Z" fill="#d3d8c6" stroke="#aeb6a1"/>`;}
+    case 'sofa':{const back=Math.min(14,d*.25),arm=Math.min(12,w*.16),seats=Math.max(1,Math.round((w-2*arm)/50)),seat=(w-2*arm)/seats;return rect(x,y,w,d,'#cbd4c3',7,'#8fa082')+Array.from({length:seats},(_,i)=>rect(x+arm+i*seat+1.5,y+back+1.5,seat-3,d-back-5,'#e1e7db',5,'#a8b59b')).join('');}
+    case 'table':return rect(x,y,w,d,'#e7d6b8',4,'#b6a186');
+    case 'low-table':return rect(x,y,w,d,'#e6d8be',Math.min(10,d/3),'#bba98d');
+    case 'round-table':return `<ellipse rx="${w/2}" ry="${d/2}" fill="#e7d6b8" stroke="#b6a186" stroke-width="1.2"/>`;
+    case 'chair':return rect(x,y,w,d,'#f7f3e9',5,'#b4aa95')+rect(x,y,w,Math.min(6,d*.25),'#e5dccb',2,'#b4aa95');
+    case 'desk':return rect(x,y,w,d,'#e5d9c5',3,'#b3a58e')+rect(-Math.min(24,w*.3),y+4,Math.min(48,w*.6),Math.min(9,d*.25),'#626f6a',2,'#a8b0a6');
+    case 'closet':return rect(x,y,w,d,'#e6dfce',1,'#bab4a5')+line(`M0 ${y}V${y+d}M${x} ${y+d-4}H${x+w}`,'#bab4a5');
+    case 'cabinet':return rect(x,y,w,d,'#e4decc',1,'#bcb5a2')+line(`M${x} ${y+d-3}H${x+w}`,'#bcb5a2');
+    case 'appliance':return rect(x,y,w,d,'#f4f6f5',3,'#a9b5b3')+`<circle r="${Math.min(w,d)*.3}" fill="#e3ebea" stroke="#a9b5b3"/>`;
+    case 'plant':return `<g transform="scale(${Math.max(w,d)/34})">${plant(0,0,17)}</g>`;
+    default:return rect(x,y,w,d,'#e7d6b8',4,'#b6a186');
+  }
+}
 function windowMark(x,y,length=80,vertical=false){return `<g transform="translate(${x} ${y})${vertical?' rotate(90)':''}"><path d="M0 0H${length}" stroke="#fbfdfd" stroke-width="10"/><path d="M0-4H${length}M0 4H${length}M0 0H${length}" stroke="#9bb8bd" stroke-width="1.4"/><path d="M0-5V5M${length/2}-4V4M${length}-5V5" stroke="#819ea4" stroke-width="1.4"/></g>`;}
 
 export class PlanEditor {
@@ -360,7 +383,7 @@ export class PlanEditor {
     }
     if(this.state.items.length>=MAX_ITEMS)throw new Error('Plantegningen kan ha maksimalt 300 elementer.');
     this.checkpoint();const bounds=getPlanBounds(this.state);
-    const item={id:uid('item'),type,x:room?room.x+room.w/2:bounds.centerX,y:room?room.y+room.h/2:bounds.centerY,rotation:0};
+    const item={id:uid('item'),type,x:room?room.x+room.w/2:bounds.centerX,y:room?room.y+room.h/2:bounds.centerY,rotation:0,...furnitureSize({type})};
     if(type==='wall'){item.x-=45;item.x2=item.x+90;item.y2=item.y;}
     if(type==='window'&&room){item.x=room.x+room.w/2;item.y=room.y;}
     if(type==='door'&&room){item.x=room.x+Math.min(50,room.w/2);item.y=room.y+room.h;}
@@ -405,7 +428,10 @@ export class PlanEditor {
     baseline.walls=note.status==='existing'&&note.loadBearing==='unknown'?rest:[...rest,note];
     this.render();this.notify();return true;
   }
-  /** Doors and windows flip (180°) so they stay on their wall; furniture and partitions turn freely. */
+  /**
+   * Doors and windows flip (180°) so they stay on their wall; a door keeps its hinge at the same end and opens to
+   * the other side. Furniture and partitions turn freely.
+   */
   rotateSelected(delta=90){
     const item=this.state.items.find(item=>item.id===this.selectedItem);if(!item)return false;
     this.checkpoint();
@@ -414,7 +440,14 @@ export class PlanEditor {
       const turn=(x,y)=>({x:precise(cx+(x-cx)*Math.cos(r)-(y-cy)*Math.sin(r)),y:precise(cy+(x-cx)*Math.sin(r)+(y-cy)*Math.cos(r))});
       const a=turn(item.x,item.y),b=turn(x2,y2);Object.assign(item,{x:a.x,y:a.y,x2:b.x,y2:b.y});
     } else item.rotation=normalizeAngle((item.rotation||0)+(item.type==='door'||item.type==='window'?180:delta));
+    if(item.type==='door')this.toggleMirror(item);
     this.render();this.notify();return true;
+  }
+  toggleMirror(item){if(item.mirrored)delete item.mirrored;else item.mirrored=true;}
+  /** Moves the selected door's hinge to the other end of the opening; it still opens to the same side. */
+  mirrorSelected(){
+    const item=this.state.items.find(item=>item.id===this.selectedItem);if(item?.type!=='door')return false;
+    this.checkpoint();this.toggleMirror(item);this.render();this.notify();return true;
   }
   duplicateSelected(){
     const item=this.state.items.find(item=>item.id===this.selectedItem);if(!item)return null;
@@ -437,9 +470,16 @@ export class PlanEditor {
     if(this.selected&&this.isCustom()){this.checkpoint();this.moveRoomBy(this.selected,dx,dy,{snapEdges:false});this.recalculate();this.render();this.notify();return true;}
     return false;
   }
-  /** Measured properties of a door or window, in metres. null removes the value. */
+  /** Measured properties of a door or window, or a piece of furniture's width and depth, in metres. null removes an opening's value. */
   updateItem(id,patch){
-    const item=this.state.items.find(item=>item.id===id);if(!item||(item.type!=='door'&&item.type!=='window'))return false;
+    const item=this.state.items.find(item=>item.id===id);if(!item)return false;
+    if(isFurniture(item.type)){
+      const [min,max]=FURNITURE_LIMITS,next={};
+      for(const key of ['width','depth'])if(Number.isFinite(patch[key])&&patch[key]>=min&&patch[key]<=max&&patch[key]!==item[key])next[key]=precise(patch[key]);
+      if(!Object.keys(next).length)return false;
+      this.checkpoint();Object.assign(item,next);this.render();this.notify();return true;
+    }
+    if(item.type!=='door'&&item.type!=='window')return false;
     this.checkpoint();
     const limits={width:item.type==='door'?[.5,3]:[.2,6],height:[.2,3],sillHeight:[0,2.5]};
     for(const key of item.type==='door'?['width']:['width','height','sillHeight']){
@@ -538,9 +578,9 @@ export class PlanEditor {
       if(this.tool==='window'&&!closest.wall.exterior)this.onNotice('Vinduet står på en innervegg og gir ikke dagslys.');
       return;
     }
-    if(['plant','sofa','table','bed'].includes(this.tool)){
+    if(isFurniture(this.tool)){
       if(this.state.items.length>=MAX_ITEMS){this.onNotice('Plantegningen kan ha maksimalt 300 elementer.');return;}
-      this.checkpoint();const item={id:uid('item'),type:this.tool,x:snap(point.x),y:snap(point.y),rotation:0};this.state.items.push(item);this.selectedItem=item.id;this.render();this.notify();return;
+      this.checkpoint();const item={id:uid('item'),type:this.tool,x:snap(point.x),y:snap(point.y),rotation:0,...furnitureSize({type:this.tool})};this.state.items.push(item);this.selectedItem=item.id;this.render();this.notify();return;
     }
     if(itemEl){
       const item=this.state.items.find(item=>item.id===itemEl.dataset.itemId);if(!item)return;
@@ -628,12 +668,16 @@ export class PlanEditor {
     const second=b2.type==='office'?`${rect(b2.x+30,b2.y+15,120,40,'#e5d9c5')}${rect(b2.x+72,b2.y+26,36,20,'#454c4a')}<circle cx="${b2.x+90}" cy="${b2.y+72}" r="14" fill="#d3c8db" stroke="#a698b0"/>${plant(b2.x+b2.w-25,b2.y+30)}`:bed(b2.x+76,b2.y+17,72,91)+rect(b2.x+10,b2.y+10,29,71,'#e4decc',1,'#bcb5a2');
     const bathing=`<g>${rect(bath.x+8,bath.y+8,48,72,'#f4f7f6',3,'#aabbbb')}${rect(bath.x+12,bath.y+12,40,63,'#edf2f2',13,'#b6c6c5')}<circle cx="${bath.x+31}" cy="${bath.y+25}" r="2" fill="#a2b6b6"/>${rect(bath.x+78,bath.y+8,30,33,'#f8faf7',3,'#a8b9b6')}<ellipse cx="${bath.x+93}" cy="${bath.y+25}" rx="10" ry="9" fill="#e9f0ee" stroke="#a8b9b6"/>${rect(bath.x+84,bath.y+65,21,29,'#fbfcf9',10,'#a8b9b6')}${rect(bath.x+82,bath.y+61,25,12,'#f3f6f2',2,'#a8b9b6')}</g>`;
     let extra='';if(this.state.rooms.some(r=>r.id==='bed3'))extra=bed(184,388,75,100);
-    return clipped('living',kitchen+lounge+(!family?dining:'')+plant(168,502,17))+clipped('bed1',mainBed)+clipped('bed2',second)+clipped('bath',bathing)+(family?clipped('bed3',extra)+clipped('dining',`<g transform="translate(0 100)">${dining}</g>`):'')+clipped('hall',rect(471,421,21,54,'#e5ddcd',0,'#c0b5a2'));
+    // A room the user furnishes drops the drawn furniture; the kitchen and the bathroom fittings stay.
+    const furnished=furnishedRoomIds(this.state),loose=(id,markup)=>furnished.has(id)?'':markup;
+    return clipped('living',kitchen+loose('living',lounge+(!family?dining:'')+plant(168,502,17)))+clipped('bed1',loose('bed1',mainBed))+clipped('bed2',loose('bed2',second))+clipped('bath',bathing)+(family?clipped('bed3',loose('bed3',extra))+clipped('dining',loose('dining',`<g transform="translate(0 100)">${dining}</g>`)):'')+clipped('hall',loose('hall',rect(471,421,21,54,'#e5ddcd',0,'#c0b5a2')));
   }
   lounge(x,y,scale){return `<g transform="translate(${x} ${y}) scale(${scale})">${rect(-8,-6,173,171,'#e7e2d6',9,'#d9d2c4',1)}<path d="M2 2H153M2 161H153" stroke="#d2cabc"/>${rect(0,0,65,151,'#c9cfc2',6,'#9da993')}${rect(7,5,51,45,'#e0e4d6',5,'#b0baa6')}${rect(7,54,51,44,'#e0e4d6',5,'#b0baa6')}${rect(7,102,51,42,'#e0e4d6',5,'#b0baa6')}${rect(-3,0,13,151,'#bcc6b2',3,'#9daa91')}${rect(6,-2,58,13,'#c5ceba',3,'#9daa91')}${rect(6,140,58,13,'#c5ceba',3,'#9daa91')}${rect(89,40,58,69,'#e6d8be',24,'#bba98d')}<ellipse cx="116" cy="74" rx="16" ry="17" fill="#f8f5eb" stroke="#c9bca2"/>${plant(118,75,7)}${rect(178,23,13,100,'#c7c1af',1,'#aaa593')}${rect(176,42,5,62,'#444d48',0,'#5d655b')}</g>`;}
 
   genericFurniture(){
+    const furnished=furnishedRoomIds(this.state);
     return this.state.rooms.map(room=>{
+      if(furnished.has(room.id)&&!['bath','kitchen'].includes(room.type))return '';
       const scale=Math.max(.1,Math.min(1,(room.w-14)/180,(room.h-14)/180));
       let markup='';
       if(room.type==='bedroom')markup=bed(-38,-54,76,108);
@@ -646,15 +690,33 @@ export class PlanEditor {
     }).join('');
   }
 
-  itemMarkup(item,detached=false){
+  /** What is in the way for each piece of furniture and each door, in words for the drawing and the Egenskaper panel. */
+  itemProblems(walls=getWallSegments(this.state)){
+    const name=id=>{const other=this.state.items.find(entry=>entry.id===id);return `«${FURNITURE[other?.type]?.name||'Møbel'}»`;};
+    const problems=new Map();
+    for(const [id,list] of furnitureConflicts(this.state,walls)){
+      const item=this.state.items.find(entry=>entry.id===id),others=[...new Set(list.filter(entry=>entry.kind==='furniture').map(entry=>name(entry.id)))],messages=[];
+      if(item?.type==='door'){problems.set(id,[`${others.join(' og ')} står i veien når døren åpnes.`]);continue;}
+      if(list.some(entry=>entry.kind==='wall'))messages.push('Går gjennom en vegg.');
+      if(list.some(entry=>entry.kind==='door'))messages.push('Står i veien når en dør åpnes.');
+      if(others.length)messages.push(`Overlapper med ${others.join(' og ')}.`);
+      problems.set(id,messages);
+    }
+    return problems;
+  }
+  itemMarkup(item,detached=false,problem=''){
     if(item.type==='wall'){
       const dx=(item.x2??item.x+90)-item.x,dy=(item.y2??item.y)-item.y,note=this.wallNote(`item:${item.id}`);
       return `<g data-item-id="${clean(item.id)}" transform="translate(${item.x} ${item.y})" style="cursor:move">${this.selectedItem===item.id?`<path d="M0 0L${dx} ${dy}" stroke="#9275c6" stroke-width="13" stroke-dasharray="4 3" opacity=".5" data-selection="true"/>`:''}<path d="M0 0L${dx} ${dy}" fill="none" ${wallStroke(note.status,false,note.loadBearing==='yes'?10:7)}/><path d="M0 0L${dx} ${dy}" stroke="transparent" stroke-width="20"/></g>`;
     }
-    const span=openingWidthUnits(item);
-    let inner='';switch(item.type){case 'window':inner=windowMark(-span/2,0,span);break;case 'door':inner=doorway(-span/2,0,'right',span);break;case 'plant':inner=plant(0,0,17);break;case 'bed':inner=bed(-32,-44,64,88);break;case 'sofa':inner=rect(-42,-22,84,44,'#cbd4c3',7,'#8fa082')+rect(-35,-17,31,32,'#e1e7db',5,'#a8b59b')+rect(3,-17,31,32,'#e1e7db',5,'#a8b59b');break;default:inner=rect(-33,-22,66,44,'#e7d6b8',15,'#b6a186');}
-    const bounds=item.type==='bed'?{x:-55,y:-50,w:110,h:100}:item.type==='door'?{x:-span/2-6,y:-14,w:span+12,h:span+20}:item.type==='window'?{x:-span/2-6,y:-16,w:span+12,h:32}:{x:-45,y:-28,w:90,h:56};
-    const warning=detached?`<rect x="${bounds.x-3}" y="${bounds.y-3}" width="${bounds.w+6}" height="${bounds.h+6}" fill="#c4413a14" stroke="#c4413a" stroke-width="1.5" stroke-dasharray="3 3" rx="5"><title>Står ikke på en vegg og telles ikke i 3D eller kontrollen</title></rect>`:'';
+    const span=openingWidthUnits(item),piece=FURNITURE[item.type];
+    let inner,bounds;
+    if(piece){const size=furnitureSize(item),w=size.width*SCALE,d=size.depth*SCALE;inner=furnitureSymbol(piece.kind,w,d);bounds={x:-w/2-4,y:-d/2-4,w:w+8,h:d+8};}
+    else if(item.type==='window'){inner=windowMark(-span/2,0,span);bounds={x:-span/2-6,y:-16,w:span+12,h:32};}
+    else if(item.type==='door'){const door=doorway(-span/2,0,'right',span);inner=item.mirrored?`<g transform="scale(-1 1)">${door}</g>`:door;bounds={x:-span/2-6,y:-14,w:span+12,h:span+20};}
+    else{inner=rect(-33,-22,66,44,'#e7d6b8',15,'#b6a186');bounds={x:-45,y:-28,w:90,h:56};}
+    const title=detached?'Står ikke på en vegg og telles ikke i 3D eller kontrollen':problem;
+    const warning=title?`<rect data-item-problem="true" x="${bounds.x-3}" y="${bounds.y-3}" width="${bounds.w+6}" height="${bounds.h+6}" fill="#c4413a14" stroke="#c4413a" stroke-width="1.5" stroke-dasharray="3 3" rx="5"><title>${clean(title)}</title></rect>`:'';
     return `<g data-item-id="${clean(item.id)}" transform="translate(${item.x} ${item.y}) rotate(${item.rotation||0})" style="cursor:move">${warning}${this.selectedItem===item.id?`<rect x="${bounds.x}" y="${bounds.y}" width="${bounds.w}" height="${bounds.h}" fill="#8467cf12" stroke="#8261c4" stroke-dasharray="4 3" rx="4" data-selection="true"/>`:''}${inner}<rect x="${bounds.x}" y="${bounds.y}" width="${bounds.w}" height="${bounds.h}" fill="transparent" stroke="none"/></g>`;
   }
 
@@ -671,6 +733,7 @@ export class PlanEditor {
     const fontScale=Math.max(.8,Math.min(2.5,viewport.size/650));
     const wallSegments=getWallSegments(this.state);
     const detached=new Set(assignOpenings(this.state,wallSegments).filter(entry=>entry.offWall).map(entry=>entry.item.id));
+    const problems=this.itemProblems(wallSegments);
     const referenceMarkup=reference&&this.layers.reference?`<g data-reference-image="true" pointer-events="none">${this.referenceImage?`<image href="${clean(this.referenceImage)}" x="${reference.x}" y="${reference.y}" width="${reference.w}" height="${reference.h}" preserveAspectRatio="none" opacity="${Math.max(.1,Math.min(1,reference.opacity??.7))}"/>`:`<rect x="${reference.x}" y="${reference.y}" width="${reference.w}" height="${reference.h}" fill="#fff" stroke="#d5cedf" stroke-dasharray="6 5"/>`}</g>`:'';
     const roomFills=rooms.map(room=>`<g data-room-id="${clean(room.id)}" style="cursor:pointer"><rect x="${room.x}" y="${room.y}" width="${room.w}" height="${room.h}" fill="${clean(room.color)}" opacity="${reference&&this.layers.reference?.25:1}"/><rect x="${room.x}" y="${room.y}" width="${room.w}" height="${room.h}" fill="url(#${room.type==='bath'?'tiles':'wood'})" opacity="${room.type==='bath'?.5:.22}"/></g>`).join('');
     const roomHitboxes=rooms.map(room=>`<rect data-room-id="${clean(room.id)}" x="${room.x+3}" y="${room.y+3}" width="${Math.max(1,room.w-6)}" height="${Math.max(1,room.h-6)}" fill="transparent" style="cursor:${this.tool==='select'?'pointer':'inherit'}"/>`).join('');
@@ -709,13 +772,14 @@ export class PlanEditor {
       const x=Math.min(this.roomStart.x,this.roomEnd.x),y=Math.min(this.roomStart.y,this.roomEnd.y),w=Math.abs(this.roomEnd.x-this.roomStart.x),h=Math.abs(this.roomEnd.y-this.roomStart.y);
       roomPreview=`<g pointer-events="none"><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#a78bd52b" stroke="#9275c6" stroke-width="2" stroke-dasharray="5 4"/><text x="${x+w/2}" y="${y+h/2}" text-anchor="middle" font-family="Arial,sans-serif" font-size="${12*fontScale}" fill="#7354ac">${format(w/SCALE)} × ${format(h/SCALE)} m</text></g>`;
     }
-    const body=referenceMarkup+roomFills+(this.layers.furniture?this.furniture():'')+roomHitboxes+walls+ghosts+wallHits+labels+this.state.items.map(item=>this.itemMarkup(item,detached.has(item.id))).join('')+selection+wallPreview+roomPreview;
+    const body=referenceMarkup+roomFills+(this.layers.furniture?this.furniture():'')+roomHitboxes+walls+ghosts+wallHits+labels+this.state.items.map(item=>this.itemMarkup(item,detached.has(item.id),(problems.get(item.id)||[]).join(' '))).join('')+selection+wallPreview+roomPreview;
     const clips=rooms.map(room=>`<clipPath id="clip-${clean(room.id)}"><rect x="${room.x+3}" y="${room.y+3}" width="${Math.max(1,room.w-6)}" height="${Math.max(1,room.h-6)}"/></clipPath>`).join('');
     this.container.innerHTML=`<svg xmlns="${NS}" width="100%" height="100%" viewBox="${viewBox}" role="img" aria-label="Redigerbar plantegning. Velg et rom, eller tegn rom over ditt eget underlag." style="display:block;overflow:visible;touch-action:none;user-select:none"><defs>${clips}<pattern id="wood" patternUnits="userSpaceOnUse" width="16" height="90"><path d="M0 0V90M16 0V90M0 0H16M0 45H8M8 90V45" stroke="#baab8f" stroke-width=".6" fill="none"/></pattern><pattern id="tiles" patternUnits="userSpaceOnUse" width="22" height="22"><path d="M0 0H22V22H0Z" stroke="#acbec5" stroke-width=".7" fill="none"/></pattern></defs><g>${body}</g>${dimensions}</svg>`;
     if(!this.exporting){
       const item=this.selectedItem?this.state.items.find(item=>item.id===this.selectedItem):null;
-      const signature=item?JSON.stringify(item)+detached.has(item.id):'';
-      if(signature!==this.itemSignature){this.itemSignature=signature;this.onItemSelect(item?{...clone(item),detached:detached.has(item.id)}:null);}
+      const itemProblems=item?problems.get(item.id)||[]:[];
+      const signature=item?JSON.stringify(item)+detached.has(item.id)+itemProblems.join():'';
+      if(signature!==this.itemSignature){this.itemSignature=signature;this.onItemSelect(item?{...clone(item),detached:detached.has(item.id),problems:itemProblems}:null);}
       // The wall panel follows a selected room wall, or a selected drawn partition wall.
       const key=item?(item.type==='wall'?`item:${item.id}`:null):this.selectedWall;
       const pieces=key?wallSegments.filter(wall=>wall.key===key):[];

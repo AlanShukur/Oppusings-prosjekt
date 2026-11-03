@@ -432,7 +432,7 @@ test('optional TEK17 facts, opening sizes and Bod rooms round-trip; unanswered f
   payload.project.building = { ceilingHeight: 2.4, permitBefore2011: true, accessibleUnit: null, lightTransmission: 0.6, unknownKey: 'dropped' };
   payload.project.measures = { bearingWall: 'vet-ikke', facade: false };
   payload.plan.rooms.push({ id: 'bod', name: 'Bod', type: 'storage', x: 460, y: 100, w: 100, h: 100, width: 2, height: 2, area: 4, color: '#e8e1d1', ceilingHeight: 2.2, previousUse: 'tilleggsdel' });
-  payload.plan.items.push({ id: 'w1', type: 'window', x: 200, y: 100, rotation: 0, width: 1.2, height: 1.3, sillHeight: 0.8, escape: true }, { id: 'd1', type: 'door', x: 140, y: 300, rotation: 90, width: 0.9, entrance: true }, { id: 'p1', type: 'plant', x: 200, y: 200, rotation: 0, width: 3 });
+  payload.plan.items.push({ id: 'w1', type: 'window', x: 200, y: 100, rotation: 0, width: 1.2, height: 1.3, sillHeight: 0.8, escape: true }, { id: 'd1', type: 'door', x: 140, y: 300, rotation: 90, width: 0.9, entrance: true }, { id: 'p1', type: 'plant', x: 200, y: 200, rotation: 0, width: 0.5, depth: 0.5, sillHeight: 1 });
   const created = (await json(await api('/api/projects', { method: 'POST', body: payload }), 201)).project;
   const read = (await json(await api(`/api/projects/${created.id}`), 200)).project;
   assert.deepEqual(read.project.building, { ceilingHeight: 2.4, permitBefore2011: true, lightTransmission: 0.6 });
@@ -441,7 +441,8 @@ test('optional TEK17 facts, opening sizes and Bod rooms round-trip; unanswered f
   assert.equal(read.plan.rooms[1].previousUse, 'tilleggsdel');
   assert.deepEqual(read.plan.items[0], payload.plan.items[0]);
   assert.deepEqual(read.plan.items[1], payload.plan.items[1]);
-  assert.equal(read.plan.items[2].width, undefined, 'opening fields are not kept on furniture');
+  assert.deepEqual([read.plan.items[2].width, read.plan.items[2].depth], [0.5, 0.5], 'furniture keeps its size');
+  assert.equal(read.plan.items[2].sillHeight, undefined, 'opening fields are not kept on furniture');
 });
 
 test('invalid optional facts are rejected instead of being stored', async () => {
