@@ -100,8 +100,13 @@ Waiting on you:
 ### Sprint 2: plan model v2 and sandbox quality
 
 *Status 03.11.2026.*
-- **Done:** plan format versions and migrations; walls with existing/new/demolish status and load-bearing marks that survive resizes; check rules for them; the "Dagens planløsning" baseline with comparison; the acceptance scenario below.
-- **Remaining:** furniture sizes, the hinge flag and the overlap check; pinch zoom and accessibility; splitting `app.js` and adding Playwright tests.
+- **Done:**
+  - plan format versions and migrations;
+  - walls with existing/new/demolish status and load-bearing marks that survive resizes, and check rules for them;
+  - the "Dagens planløsning" baseline with comparison;
+  - the acceptance scenario below;
+  - `app.js` split into a short entry file and 18 modules, with the project brief as a pure, tested module and a browser check that opens every dialog (`dialogs.mjs`).
+- **Remaining:** furniture sizes, the hinge flag and the overlap check; pinch zoom and accessibility; Playwright tests for pointer and touch.
 
 - `plan.schemaVersion` and migrations (M-1, API-1).
 - Walls become their own entities with *existing / new / demolish* status and a *load-bearing yes/no/unknown* flag. Wall annotations survive a resize (ED-16, TEK-M3).

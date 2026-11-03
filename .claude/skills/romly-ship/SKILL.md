@@ -64,7 +64,8 @@ node .claude/skills/romly-ship/gh-runs.mjs <run-id>   # its steps
   ```bash
   node .claude/skills/romly-browser-qa/smoke.mjs https://romly-staging.romly.workers.dev
   ```
-- **Report the result:** give the run result, the smoke result, and anything the user should look at.
+  Then run the checks for what the PR changed (`dialogs.mjs`, `walls.mjs`, `baseline.mjs`, `plan-version.mjs`; see **romly-browser-qa**). After a large studio change, run all five.
+- **Report the result:** give the run result, the browser-check results, and anything the user should look at.
 
 ## Production
 

@@ -51,9 +51,10 @@ add(ruleId, ref, title, status, message, {roomId})
   - **Other changes:** exterior opening changes, new bathrooms (less than half of the room was a bathroom today) and storage→stay rooms (at least half of a `storage` room) answer the facade, bathroom and change-of-use questions from the drawing. For example, `bearingWall` is the stricter of `measures.bearingWall` and what the demolished walls say.
 - **Per project:** `project.building` (for example `lightTransmission`, `permitBefore2011`) and `project.measures` (for example `useChange`).
 - **A new input needs all of these:**
-  1. A question in `FACT_QUESTIONS` in `app.js`, or a field in the room or item inspector.
+  1. A question in `FACT_QUESTIONS` in `facts.js`, or a field in the room or item inspector (`inspector.js`). A new question shows up in the facts form (`check-ui.js`) and in the brief's answers by itself.
   2. An entry in the allowlist in `lib/projects-api.mjs`, with a range.
   3. A test.
+- **The project brief** is `projectBrief(state, project, {example, date})` in `brief.js`: pure, and tested in `tests/brief.test.mjs`. It lists every result with its source, so a new rule needs no change there.
 
   See **romly-studio** for which files change together.
 
