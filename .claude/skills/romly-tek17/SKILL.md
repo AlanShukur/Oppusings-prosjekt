@@ -45,7 +45,10 @@ add(ruleId, ref, title, status, message, {roomId})
 - **Per room:** `ceilingHeight` and `previousUse`. Per opening: `width`, `height`, `sillHeight`, `entrance` and `escape`.
 - **Per wall:** `status` (existing/new/demolish) and `loadBearing` (unknown/yes/no) on every wall from `deriveWalls`, read from `plan.walls`.
   - Group walls by `wall.key`, so a wall drawn in several pieces is reported once.
-  - The drawing may only make the questionnaire's answer stricter. For example, `bearingWall` is the stricter of `measures.bearingWall` and what the demolished walls say.
+  - The drawing may only make the questionnaire's answer stricter.
+- **Changes since the baseline:** `diff = compareToBaseline(plan)` is computed once at the top of `evaluatePlan`, and is `null` without a baseline.
+  - **Removed walls** carry the baseline's load-bearing note. Results about them pass `{baselineWallKey}`, and the check dialog then shows Ja/Nei buttons that call `editor.updateBaselineWall`.
+  - **Other changes:** exterior opening changes, new bathrooms (less than half of the room was a bathroom today) and storage→stay rooms (at least half of a `storage` room) answer the facade, bathroom and change-of-use questions from the drawing. For example, `bearingWall` is the stricter of `measures.bearingWall` and what the demolished walls say.
 - **Per project:** `project.building` (for example `lightTransmission`, `permitBefore2011`) and `project.measures` (for example `useChange`).
 - **A new input needs all of these:**
   1. A question in `FACT_QUESTIONS` in `app.js`, or a field in the room or item inspector.

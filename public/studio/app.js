@@ -1,5 +1,6 @@
 import { PlanEditor, migratePlan } from './plan.js';
 import { deriveWalls } from './scene-geometry.js';
+import { compareToBaseline } from './plan-diff.js';
 import { ProjectSync, isRevisionConflict } from './cloud.js';
 import { createLocalApi, LOCAL_USER } from './local-store.js';
 import { openFloorplanFile, calibrateReference } from './reference-loader.js';
@@ -116,7 +117,7 @@ function selectRoom(r){
   for(const el of document.querySelectorAll('#room-name,#room-width,#room-height,#room-type,[data-material],#rename-room,#room-ceiling,#room-previous-use'))el.disabled=!r;
   document.querySelectorAll('.material').forEach(b=>b.classList.toggle('active',b.dataset.material===r?.color));renderRooms();
 }
-editor=new PlanEditor($('#floorplan'),{onSelect:selectRoom,onChange:state=>{persist(state);updateWallLegend(state);},onViewError:error=>{reportProblem(error,{context:'3d'});setView('2d');toast(error.message||'3D ble avbrutt. Tegningen er åpnet i 2D.');},onNotice:toast,onItemSelect:showItem,onWallSelect:showWall,onZoom:value=>{zoom=value;$('#zoom-value').textContent=value+' %';}});
+editor=new PlanEditor($('#floorplan'),{onSelect:selectRoom,onChange:state=>{persist(state);updateWallLegend(state);updateBaselineButton(state);},onViewError:error=>{reportProblem(error,{context:'3d'});setView('2d');toast(error.message||'3D ble avbrutt. Tegningen er åpnet i 2D.');},onNotice:toast,onItemSelect:showItem,onWallSelect:showWall,onZoom:value=>{zoom=value;$('#zoom-value').textContent=value+' %';}});
 const initialPlan=editor.getState();
 function renderProject(){$('#project-title').textContent=project.name;$('#breadcrumb-title').textContent=project.name;$('#variant-name').textContent=editor?.getState().variant==='custom'?'Egen':project.variant;$('.prototype-label').textContent=activeRecord?'Tidlig produktversjon · Ditt prosjekt':'Eksempelvisning · Ikke lagret';}
 renderProject();selectRoom(rooms().find(r=>r.id===selectedId)||rooms()[0]);
@@ -161,6 +162,45 @@ function showWall(wall){
 $('#wall-status').onchange=e=>shownWall&&editor.updateWall(shownWall.key,{status:e.target.value});
 $('#wall-bearing').onchange=e=>shownWall&&editor.updateWall(shownWall.key,{loadBearing:e.target.value});
 function updateWallLegend(state){$('#wall-legend').hidden=!state?.walls?.length;}
+// "Dagens planløsning": a saved snapshot of the plan that the check compares changes with (plan-diff.js).
+const savedDate=iso=>new Date(iso).toLocaleDateString('nb-NO');
+function updateBaselineButton(state){
+  const saved=state?.baseline,button=$('#baseline-btn');
+  button.classList.toggle('saved',!!saved);button.querySelector('[data-icon]').innerHTML=icon(saved?'check':'document');
+  $('#baseline-label').textContent=saved?`Dagens planløsning · ${savedDate(saved.savedAt)}`:'Lagre dagens planløsning';
+  button.title=saved?'Dagens planløsning er lagret. Prosjektkontrollen sammenligner med den.':'Lagre tegningen slik boligen er i dag';
+}
+function baselineSummary(diff){
+  const lines=[],count=(n,one,many)=>`${n} ${n===1?one:many}`;
+  if(diff.removedWalls.length)lines.push(count(diff.removedWalls.length,'vegg er fjernet','vegger er fjernet'));
+  if(diff.newWalls.length)lines.push(count(diff.newWalls.length,'ny vegg','nye vegger'));
+  const facade=[...diff.newOpenings,...diff.removedOpenings].filter(entry=>entry.exterior).length;
+  if(facade)lines.push(count(facade,'endring','endringer')+' av vinduer eller dører i yttervegg');
+  return lines;
+}
+function openBaseline(){
+  const state=editor.getState(),saved=state.baseline;
+  if(!saved){
+    const bearing=(state.walls||[]).filter(note=>note.loadBearing==='yes').length;
+    openDialog('Dagens planløsning','Lagre tegningen slik boligen er i dag.',`<p class="account-note">Deretter kan du endre planen fritt. Prosjektkontrollen sammenligner med dagens planløsning og finner fjernede vegger, endrede vinduer og dører i yttervegg, nye bad og bod som blir oppholdsrom.</p><div class="info-banner">${icon('info')}<p>${bearing?`${bearing} ${bearing===1?'vegg er':'vegger er'} markert som bærende.`:'Ingen vegger er markert som bærende ennå.'} Marker bærende vegger før du lagrer, så vet kontrollen hvilke fjernede vegger som var bærende.</p></div>`,`<button class="button secondary" id="baseline-cancel">Avbryt</button><button class="button primary" id="baseline-save">${icon('check')} Lagre som dagens planløsning</button>`);
+    $('#baseline-cancel').onclick=closeDialog;
+    $('#baseline-save').onclick=()=>{editor.setBaseline();closeDialog();toast('Dagens planløsning er lagret. Nå kan du endre planen.');};
+    return;
+  }
+  const lines=baselineSummary(compareToBaseline(state));
+  openDialog('Dagens planløsning',`Lagret ${savedDate(saved.savedAt)}. ${saved.rooms.length} rom.`,`<h4 class="baseline-heading">Endringer siden da</h4>${lines.length?`<ul class="baseline-changes">${lines.map(line=>`<li>${esc(line)}</li>`).join('')}</ul>`:'<p class="account-note">Ingen endringer i vegger, vinduer eller dører ennå.</p>'}<label class="check-row"><input type="checkbox" id="baseline-ghosts" ${editor.layers.baseline!==false?'checked':''}><span>Vis fjernede vegger i tegningen</span></label><p class="info-banner" id="baseline-confirm" hidden></p>`,`<button class="button secondary" id="baseline-remove">Fjern</button><button class="button secondary" id="baseline-replace">Erstatt med tegningen nå</button><button class="button primary" id="baseline-close">Lukk</button>`);
+  $('#baseline-close').onclick=closeDialog;
+  $('#baseline-ghosts').onchange=e=>editor.setLayers({baseline:e.target.checked});
+  // Removing or replacing the baseline loses what the check compares with, so both ask once more.
+  let pending=null;
+  const confirm=(action,label,warning,run)=>{
+    if(pending!==action){pending=action;$('#baseline-confirm').hidden=false;$('#baseline-confirm').textContent=warning;$('#baseline-remove').textContent=action==='remove'?'Bekreft fjerning':'Fjern';$('#baseline-replace').textContent=action==='replace'?'Bekreft erstatning':'Erstatt med tegningen nå';return;}
+    run();closeDialog();toast(label);
+  };
+  $('#baseline-remove').onclick=()=>confirm('remove','Dagens planløsning er fjernet.','Kontrollen slutter å sammenligne med dagens planløsning. Du kan angre med Ctrl+Z.',()=>editor.clearBaseline());
+  $('#baseline-replace').onclick=()=>confirm('replace','Dagens planløsning er erstattet med tegningen.','Tegningen slik den er nå blir dagens planløsning, og endringene du har gjort forsvinner fra sammenligningen. Du kan angre med Ctrl+Z.',()=>editor.setBaseline());
+}
+$('#baseline-btn').onclick=openBaseline;
 $('#rename-room').onclick=()=>{$('#room-name').focus();$('#room-name').select();};
 document.querySelectorAll('[data-material]').forEach(b=>b.onclick=()=>editor.updateRoom(selectedId,{color:b.dataset.material}));
 function setTool(tool){if(currentView==='3d'||editor.view==='loading3d')setView('2d');activeTool=tool;$('.studio').dataset.tool=tool;editor.setTool(tool);document.querySelectorAll('[data-tool]').forEach(b=>b.classList.toggle('active',b.dataset.tool===tool));$('#canvas-hint').innerHTML=icon(tool==='select'?'cursor':tool==='pan'?'hand':tool)+({select:'Klikk på et rom eller en vegg for å tilpasse. Dra i tomt område for å panorere',pan:'Dra for å flytte tegningen. Rull for å zoome',room:'Dra fra ett hjørne til et annet for å tegne rommet',wall:'Klikk for å tegne skillevegger etter hverandre. Esc avslutter',door:'Klikk på en vegg for å plassere en dør',window:'Klikk på en yttervegg for å plassere et vindu'}[tool]||'Klikk i plantegningen');}
@@ -406,7 +446,7 @@ function renderCheckResults(){
   const headline=s.brudd?`${s.brudd} forhold oppfyller ikke preaksepterte ytelser`:s.soknad?'Tiltaket ser ut til å kreve søknad':s.ukjent?`${s.ukjent} ${s.ukjent===1?'punkt mangler':'punkter mangler'} opplysninger`:'Ingen avvik funnet i tegningen';
   const intro=state.rooms.length?(editor.isExample()?'Kontrollen gjelder Romlys eksempelbolig. Tegn din egen bolig for en kontroll av den.':'Kontrollen bygger på tegningen og svarene dine. Den er veiledende og erstatter ikke fagfolk.'):'Tegn rommene for å få en kontroll av planen.';
   const chips=Object.entries(s).filter(([,count])=>count).map(([status,count])=>`<span class="check-chip" data-status="${status}">${count} · ${esc(STATUS_LABELS[status])}</span>`).join('');
-  const item=result=>`<article class="check-item" data-status="${result.status}"><span class="check-icon">${icon(CHECK_ICONS.find(([pattern])=>pattern.test(result.ruleId))?.[1]||'edit')}</span><div><div class="check-item-heading"><h3>${esc(result.title)}${result.roomId&&state.rooms.find(r=>r.id===result.roomId)?` · ${esc(state.rooms.find(r=>r.id===result.roomId).name)}`:''}</h3><span class="check-status">${esc(STATUS_LABELS[result.status])}</span></div><p>${esc(result.message)}</p><div class="check-actions">${result.url?`<a class="check-link" href="${esc(result.url)}" target="_blank" rel="noopener noreferrer">${esc(result.ref)} ↗</a>`:`<span class="check-link">${esc(result.ref)}</span>`}${result.wallKey?`<button type="button" data-show-wall="${esc(result.wallKey)}">Vis i tegningen</button>`:result.roomId?`<button type="button" data-show-room="${esc(result.roomId)}">Vis i tegningen</button>`:''}${result.status==='ukjent'&&!result.roomId&&!result.wallKey?'<button type="button" data-open-facts>Legg inn opplysninger</button>':''}</div></div></article>`;
+  const item=result=>`<article class="check-item" data-status="${result.status}"><span class="check-icon">${icon(CHECK_ICONS.find(([pattern])=>pattern.test(result.ruleId))?.[1]||'edit')}</span><div><div class="check-item-heading"><h3>${esc(result.title)}${result.roomId&&state.rooms.find(r=>r.id===result.roomId)?` · ${esc(state.rooms.find(r=>r.id===result.roomId).name)}`:''}</h3><span class="check-status">${esc(STATUS_LABELS[result.status])}</span></div><p>${esc(result.message)}</p><div class="check-actions">${result.url?`<a class="check-link" href="${esc(result.url)}" target="_blank" rel="noopener noreferrer">${esc(result.ref)} ↗</a>`:`<span class="check-link">${esc(result.ref)}</span>`}${result.wallKey?`<button type="button" data-show-wall="${esc(result.wallKey)}">Vis i tegningen</button>`:result.roomId?`<button type="button" data-show-room="${esc(result.roomId)}">Vis i tegningen</button>`:''}${result.baselineWallKey&&result.status==='ukjent'?`<span class="check-answer">Bærende? <button type="button" data-baseline-bearing="yes" data-key="${esc(result.baselineWallKey)}">Ja</button><button type="button" data-baseline-bearing="no" data-key="${esc(result.baselineWallKey)}">Nei</button></span>`:''}${result.status==='ukjent'&&!result.roomId&&!result.wallKey&&!result.baselineWallKey?'<button type="button" data-open-facts>Legg inn opplysninger</button>':''}</div></div></article>`;
   const groups=[['Må følges opp',report.results.filter(r=>['brudd','soknad','advarsel'].includes(r.status))],['Mangler opplysninger',report.results.filter(r=>r.status==='ukjent')],['Ser bra ut',report.results.filter(r=>r.status==='ok')],['Til informasjon',report.results.filter(r=>r.status==='info')]].filter(([,list])=>list.length);
   container.innerHTML=`<div class="check-overview"><span class="check-overview-icon">${icon('shield')}</span><div><span class="status-pill warning-pill">VEILEDENDE KONTROLL · TEK17</span><h3>${esc(headline)}</h3><p>${esc(intro)}</p><div class="check-summary">${chips}</div></div></div><div class="check-metrics"><span><strong>${state.rooms.length}</strong> tegnede rom</span><span><strong>${esc(project.municipality||'Ikke valgt')}</strong> kommune</span><span>Regelgrunnlag kontrollert <strong>${esc(RULESET.verified)}</strong></span></div>${groups.map(([title,list])=>`<h3 class="check-group-title">${esc(title)}</h3><div class="check-list">${list.map(item).join('')}</div>`).join('')}${report.assumptions.length?`<ul class="check-assumptions">${report.assumptions.map(a=>`<li>${esc(a)}</li>`).join('')}</ul>`:''}`;
   return report;
@@ -419,6 +459,8 @@ function openCheck(){
   $('#check-results').onclick=e=>{
     const show=e.target.closest('[data-show-room]');if(show){closeDialog();editor.selectRoom(show.dataset.showRoom);if(compactWorkspace.matches)setWorkspacePanel('properties');return;}
     const showWall=e.target.closest('[data-show-wall]');if(showWall){closeDialog();editor.selectWall(showWall.dataset.showWall);if(compactWorkspace.matches)setWorkspacePanel('properties');return;}
+    // A removed wall exists only in "Dagens planløsning", so its load-bearing answer is recorded there.
+    const answer=e.target.closest('[data-baseline-bearing]');if(answer){editor.updateBaselineWall(answer.dataset.key,{loadBearing:answer.dataset.baselineBearing});renderCheckResults();return;}
     if(e.target.closest('[data-open-facts]')){$('#facts-form').open=true;$('#facts-form').scrollIntoView({block:'start',behavior:'smooth'});$('#facts-form [data-fact]')?.focus({preventScroll:true});}
   };
 }
@@ -434,12 +476,22 @@ function wallChanges(state){
     return `- ${what} (${fmt(own.reduce((sum,wall)=>sum+wall.length,0)/50)} m): ${WALL_STATUS_TEXT[note.status]}, bærende: ${WALL_BEARING_TEXT[note.loadBearing]}`;
   }).filter(Boolean);
 }
+/** The brief's comparison with "Dagens planløsning": removed walls with their load-bearing answer, new walls, facade openings. */
+function baselineBrief(state){
+  const diff=compareToBaseline(state);
+  if(!diff)return 'Ikke lagret. Kontrollen sammenligner ikke med dagens planløsning.';
+  const name=(wall,rooms)=>{const names=wall.roomIds.map(id=>rooms.find(room=>room.id===id)?.name).filter(Boolean);return wall.source==='item'?'Tegnet skillevegg':names.length>1?`Vegg mellom ${names.join(' og ')}`:`Yttervegg til ${names[0]||'ukjent rom'}`;};
+  const lines=[...diff.removedWalls.map(wall=>`- Fjernet: ${name(wall,diff.rooms)} (${fmt(wall.length/50)} m), bærende: ${WALL_BEARING_TEXT[wall.loadBearing]}`),...diff.newWalls.map(wall=>`- Ny: ${name(wall,state.rooms)} (${fmt(wall.length/50)} m)`)];
+  const facade=[...diff.newOpenings,...diff.removedOpenings].filter(entry=>entry.exterior).length;
+  if(facade)lines.push(`- ${facade} ${facade===1?'endring':'endringer'} av vinduer eller dører i yttervegg`);
+  return `Lagret ${savedDate(diff.savedAt)}.\n${lines.join('\n')||'Ingen endringer i vegger, vinduer eller dører.'}`;
+}
 function downloadReport(){
   const state=editor.getState(),report=evaluatePlan(state,project),openings=state.items.filter(item=>item.type==='window'||item.type==='door');
   const counts=Object.entries(report.summary).filter(([,count])=>count).map(([status,count])=>`${count} ${STATUS_LABELS[status].toLowerCase()}`).join(', ');
   const room=r=>`${r.name} (${ROOM_TYPE_NAMES[r.type]||'Rom'}): ${fmt(r.width)} × ${fmt(r.height)} m, ${fmt(r.area??r.width*r.height)} m²${Number.isFinite(r.ceilingHeight)?`, takhøyde ${fmt(r.ceilingHeight)} m`:''}${r.previousUse==='tilleggsdel'?', i dag bod/kjeller/loft':''}`;
   const opening=item=>`${item.type==='window'?'Vindu':'Dør'}${item.entrance?' (inngang)':''}${item.escape?' (rømningsvindu)':''}: ${Number.isFinite(item.width)?`bredde ${fmt(item.width)} m`:'bredde ikke oppgitt'}${item.type==='window'?`, ${Number.isFinite(item.height)?`høyde ${fmt(item.height)} m`:'høyde ikke oppgitt'}, ${Number.isFinite(item.sillHeight)?`underkant ${fmt(item.sillHeight)} m`:'underkant ikke oppgitt'}`:''}`;
-  const text=`ROMLY – PROSJEKTBRIEF\n${project.name}\nKommune: ${project.municipality||'Ikke oppgitt'}\nDato: ${new Date().toLocaleDateString('nb-NO')}\nKontrollgrunnlag: ${RULESET.id} ${RULESET.version} (regelverk kontrollert ${RULESET.verified})\n${editor.isExample()?'\nTEGNINGEN ER ROMLYS EKSEMPELBOLIG, IKKE DIN BOLIG.\n':''}\nDINE ØNSKER\n${project.bedrooms} soverom, ${project.bathrooms} bad\n${project.wishes||'Ingen ønsker skrevet inn.'}\n\nTEGNEDE ROM\n${state.rooms.map(room).join('\n')||'Ingen rom tegnet.'}\n\nVINDUER OG DØRER\n${openings.map(opening).join('\n')||'Ingen tegnet.'}\n\nENDRINGER I VEGGER\n${wallChanges(state).join('\n')||'Ingen vegger er markert.'}\n\nOPPLYSNINGER DU HAR GITT\n${FACT_QUESTIONS.map(q=>`${q.label} ${factText(q)}`).join('\n')}\n\nVEILEDENDE KONTROLL (${counts})\n${report.results.map((r,i)=>`${i+1}. [${STATUS_LABELS[r.status]}] ${r.title} – ${r.ref}\n${r.message}${r.url?`\nKilde: ${r.url}`:''}`).join('\n\n')}\n\nFORUTSETNINGER\n${report.assumptions.map(a=>`- ${a}`).join('\n')}\n\n${DISCLAIMER}\n\nMålene er skisseverdier og må kontrolleres mot oppmåling. Dette er ikke AI-analyse, teknisk kontroll eller en ferdig byggesøknad.\n`;
+  const text=`ROMLY – PROSJEKTBRIEF\n${project.name}\nKommune: ${project.municipality||'Ikke oppgitt'}\nDato: ${new Date().toLocaleDateString('nb-NO')}\nKontrollgrunnlag: ${RULESET.id} ${RULESET.version} (regelverk kontrollert ${RULESET.verified})\n${editor.isExample()?'\nTEGNINGEN ER ROMLYS EKSEMPELBOLIG, IKKE DIN BOLIG.\n':''}\nDINE ØNSKER\n${project.bedrooms} soverom, ${project.bathrooms} bad\n${project.wishes||'Ingen ønsker skrevet inn.'}\n\nTEGNEDE ROM\n${state.rooms.map(room).join('\n')||'Ingen rom tegnet.'}\n\nVINDUER OG DØRER\n${openings.map(opening).join('\n')||'Ingen tegnet.'}\n\nENDRINGER I VEGGER\n${wallChanges(state).join('\n')||'Ingen vegger er markert.'}\n\nDAGENS PLANLØSNING\n${baselineBrief(state)}\n\nOPPLYSNINGER DU HAR GITT\n${FACT_QUESTIONS.map(q=>`${q.label} ${factText(q)}`).join('\n')}\n\nVEILEDENDE KONTROLL (${counts})\n${report.results.map((r,i)=>`${i+1}. [${STATUS_LABELS[r.status]}] ${r.title} – ${r.ref}\n${r.message}${r.url?`\nKilde: ${r.url}`:''}`).join('\n\n')}\n\nFORUTSETNINGER\n${report.assumptions.map(a=>`- ${a}`).join('\n')}\n\n${DISCLAIMER}\n\nMålene er skisseverdier og må kontrolleres mot oppmåling. Dette er ikke AI-analyse, teknisk kontroll eller en ferdig byggesøknad.\n`;
   download('romly-prosjektbrief.txt',text,'text/plain;charset=utf-8');toast('Prosjektbriefen er lastet ned.');
 }
 function openExport(){

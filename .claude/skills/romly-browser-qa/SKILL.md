@@ -58,6 +58,20 @@ Run this after changing walls, the 2D editor's click handling or the inspector. 
 
 To read a downloaded file in a check, replace `URL.createObjectURL` for one call and read the Blob's text; `walls.mjs` does this for the brief.
 
+## Baseline check
+
+```bash
+node .claude/skills/romly-browser-qa/baseline.mjs <base-url>
+```
+
+Run this after changing "Dagens planløsning", `plan-diff.js` or the check rules that use it. It sets up Stue + Bod, saves the baseline through the dialog, then merges the Bod into a bedroom. It checks:
+- **Drawing:** the ghost of the removed wall.
+- **The check:** "Var veggen bærende?" with Ja/Nei; answering Ja turns it into "Fjernet bærende vegg", and "Bod blir oppholdsrom" is reported.
+- **Brief, reload and dialog:** the brief's "DAGENS PLANLØSNING" section, a reload, and the dialog summary.
+- **Removal:** the two-step Fjern, then Ctrl+Z.
+
+When a check tests that something is hidden, use the computed `display`, not the `hidden` attribute. `.info-banner` once overrode `hidden`, and only a screenshot caught it.
+
 On a phone the panel is under the *Egenskaper* tab (`[data-workspace-panel="properties"]`), like the room and element panels.
 
 ## Writing a new check

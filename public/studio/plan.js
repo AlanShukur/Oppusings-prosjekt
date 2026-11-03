@@ -1,4 +1,5 @@
 import { deriveWalls, getSceneBounds, projectToWall, assignOpenings, openingWidthUnits, WALL_STATUSES, LOAD_BEARING } from './scene-geometry.js';
+import { compareToBaseline } from './plan-diff.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const SCALE = 50;
@@ -75,10 +76,11 @@ export function upgradeExamplePlan(plan){
   return openings.length?{...plan,items:[...(plan.items||[]),...openings].slice(0,MAX_ITEMS)}:plan;
 }
 /** Version of the saved plan format. Bump it with a new MIGRATIONS entry whenever saved plans change shape, and keep PLAN_VERSION in lib/projects-api.mjs equal (a test checks). */
-export const PLAN_VERSION=2;
+export const PLAN_VERSION=3;
 // MIGRATIONS[n] turns a version n plan into version n+1. Version 0 is every plan saved before versioning.
 // 0 → 1: example plans get real doors and windows. 1 → 2: walls get saved notes (status, load-bearing); none exist yet.
-const MIGRATIONS=[upgradeExamplePlan,plan=>({...plan,walls:[]})];
+// 2 → 3: plans may carry a baseline ("Dagens planløsning"); none exists yet, so nothing changes.
+const MIGRATIONS=[upgradeExamplePlan,plan=>({...plan,walls:[]}),plan=>plan];
 const MAX_WALL_NOTES=300;
 /** Wall notes from storage or an import: valid, unique, and only those that differ from the default. */
 function cleanWallNotes(list){
@@ -88,6 +90,13 @@ function cleanWallNotes(list){
     if(note.status!=='existing'||note.loadBearing!=='unknown')notes.set(note.key,{key:note.key,status:note.status,loadBearing:note.loadBearing});
   }
   return [...notes.values()].slice(0,MAX_WALL_NOTES);
+}
+/** A saved baseline from storage or an import, or undefined. Its geometry is kept as saved; only its shape is checked. */
+function cleanBaseline(baseline){
+  if(!baseline||!Array.isArray(baseline.rooms)||!Array.isArray(baseline.items))return undefined;
+  const rooms=baseline.rooms.filter(room=>room&&typeof room.id==='string'&&[room.x,room.y,room.w,room.h].every(Number.isFinite)&&room.w>0&&room.h>0).slice(0,MAX_ROOMS);
+  const items=baseline.items.filter(item=>item&&typeof item.id==='string'&&Number.isFinite(item.x)&&Number.isFinite(item.y)).slice(0,MAX_ITEMS);
+  return {savedAt:typeof baseline.savedAt==='string'&&!Number.isNaN(Date.parse(baseline.savedAt))?baseline.savedAt:new Date(0).toISOString(),rooms:clone(rooms),items:clone(items),walls:cleanWallNotes(baseline.walls)};
 }
 /** Demolished walls are dashed red and new walls green; load-bearing walls are drawn wider by the caller. */
 function wallStroke(status,exterior,width){
@@ -124,7 +133,7 @@ export class PlanEditor {
     this.selected='living';
     this.selectedItem=null;this.selectedWall=null;this.wallSignature='';
     this.tool='select';this.view='2d';this.zoom=100;this.viewport=null;
-    this.layers={dimensions:true,furniture:true,reference:true};
+    this.layers={dimensions:true,furniture:true,reference:true,baseline:true};
     this.history=[];this.future=[];
     this.drag=null;
     this.wallStart=null;this.wallEnd=null;
@@ -149,6 +158,7 @@ export class PlanEditor {
     if(!state||!Array.isArray(state.rooms))throw new Error('Plantegningen kunne ikke leses.');
     state=migratePlan(state);
     this.state={rooms:clone(state.rooms),items:clone(state.items||[]),variant:state.variant||'balanced',walls:cleanWallNotes(state.walls)};this.selectedWall=null;
+    const baseline=cleanBaseline(state.baseline);if(baseline)this.state.baseline=baseline;
     if(state.reference)this.state.reference=clone(state.reference);
     this.history=[];this.future=[];this.drag=null;this.selectedItem=null;this.wallStart=null;this.wallEnd=null;this.roomStart=null;this.roomEnd=null;
     this.referenceImage=null;this.viewGeneration++;this.viewer?.dispose();this.viewer=null;this.view='2d';this.viewport=null;
@@ -238,7 +248,7 @@ export class PlanEditor {
   }
   /** True when switching suggestion would discard the user's own work. */
   hasCustomEdits(){
-    if(this.isCustom()||this.state.walls?.length)return true;
+    if(this.isCustom()||this.state.walls?.length||this.state.baseline)return true;
     const pristine=new Map(exampleOpenings(this.state.rooms).map(item=>[item.id,JSON.stringify(item)]));
     if(this.state.items.some(item=>pristine.get(item.id)!==JSON.stringify(item))||this.state.items.length!==pristine.size)return true;
     const base=new Map(initialRooms.map(room=>[room.id,room]));
@@ -382,6 +392,19 @@ export class PlanEditor {
   }
   /** Notes belong to walls that exist: a resize that keeps two rooms touching keeps their wall's note. */
   pruneWallNotes(){if(!this.state.walls?.length)return;const keys=new Set(getWallSegments(this.state).map(wall=>wall.key));this.state.walls=this.state.walls.filter(note=>keys.has(note.key));}
+  /** Saves the drawing as it is now as "Dagens planløsning"; the check compares later changes with it. */
+  setBaseline(){this.checkpoint();this.state.baseline={savedAt:new Date().toISOString(),rooms:clone(this.state.rooms),items:clone(this.state.items),walls:clone(this.state.walls||[])};this.render();this.notify();return true;}
+  clearBaseline(){if(!this.state.baseline)return false;this.checkpoint();delete this.state.baseline;this.render();this.notify();return true;}
+  /** Records whether a wall in the baseline was load-bearing; the check asks this for walls removed since. */
+  updateBaselineWall(key,{loadBearing}={}){
+    const baseline=this.state.baseline;if(!baseline||!LOAD_BEARING.includes(loadBearing))return false;
+    if(!getWallSegments({rooms:baseline.rooms,items:baseline.items}).some(wall=>wall.key===key))return false;
+    this.checkpoint();
+    const old=baseline.walls.find(note=>note.key===key),note={key,status:old?.status||'existing',loadBearing};
+    const rest=baseline.walls.filter(entry=>entry.key!==key);
+    baseline.walls=note.status==='existing'&&note.loadBearing==='unknown'?rest:[...rest,note];
+    this.render();this.notify();return true;
+  }
   /** Doors and windows flip (180°) so they stay on their wall; furniture and partitions turn freely. */
   rotateSelected(delta=90){
     const item=this.state.items.find(item=>item.id===this.selectedItem);if(!item)return false;
@@ -668,6 +691,9 @@ export class PlanEditor {
       const highlight=wall.key===this.selectedWall?`<path d="${wallPath(wall)}" stroke="#9275c6" stroke-width="${width+10}" stroke-linecap="round" opacity=".4" data-selection="true" pointer-events="none"/>`:'';
       return `${highlight}<path d="${wallPath(wall)}" fill="none" ${wallStroke(wall.status,wall.exterior,width)}/>`;
     }).join('');
+    // Walls in "Dagens planløsning" that are gone from the drawing, as red dashed ghosts.
+    const diff=this.state.baseline&&this.layers.baseline!==false?compareToBaseline(this.state):null;
+    const ghosts=diff?diff.removedWalls.flatMap(wall=>wall.pieces).map(piece=>`<path data-removed-wall="true" d="M${precise(piece.x)} ${precise(piece.y)}L${precise(piece.x2)} ${precise(piece.y2)}" stroke="#c4553f" stroke-width="4" stroke-dasharray="7 5" opacity=".55" pointer-events="none"/>`).join(''):'';
     const wallHits=this.tool==='select'&&!this.exporting?roomWalls.map(wall=>`<path data-wall-key="${clean(wall.key)}" d="${wallPath(wall)}" stroke="transparent" stroke-width="12" style="cursor:pointer"/>`).join(''):'';
     let dimensions='';
     if(this.layers.dimensions&&(rooms.length||reference)){
@@ -683,7 +709,7 @@ export class PlanEditor {
       const x=Math.min(this.roomStart.x,this.roomEnd.x),y=Math.min(this.roomStart.y,this.roomEnd.y),w=Math.abs(this.roomEnd.x-this.roomStart.x),h=Math.abs(this.roomEnd.y-this.roomStart.y);
       roomPreview=`<g pointer-events="none"><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#a78bd52b" stroke="#9275c6" stroke-width="2" stroke-dasharray="5 4"/><text x="${x+w/2}" y="${y+h/2}" text-anchor="middle" font-family="Arial,sans-serif" font-size="${12*fontScale}" fill="#7354ac">${format(w/SCALE)} × ${format(h/SCALE)} m</text></g>`;
     }
-    const body=referenceMarkup+roomFills+(this.layers.furniture?this.furniture():'')+roomHitboxes+walls+wallHits+labels+this.state.items.map(item=>this.itemMarkup(item,detached.has(item.id))).join('')+selection+wallPreview+roomPreview;
+    const body=referenceMarkup+roomFills+(this.layers.furniture?this.furniture():'')+roomHitboxes+walls+ghosts+wallHits+labels+this.state.items.map(item=>this.itemMarkup(item,detached.has(item.id))).join('')+selection+wallPreview+roomPreview;
     const clips=rooms.map(room=>`<clipPath id="clip-${clean(room.id)}"><rect x="${room.x+3}" y="${room.y+3}" width="${Math.max(1,room.w-6)}" height="${Math.max(1,room.h-6)}"/></clipPath>`).join('');
     this.container.innerHTML=`<svg xmlns="${NS}" width="100%" height="100%" viewBox="${viewBox}" role="img" aria-label="Redigerbar plantegning. Velg et rom, eller tegn rom over ditt eget underlag." style="display:block;overflow:visible;touch-action:none;user-select:none"><defs>${clips}<pattern id="wood" patternUnits="userSpaceOnUse" width="16" height="90"><path d="M0 0V90M16 0V90M0 0H16M0 45H8M8 90V45" stroke="#baab8f" stroke-width=".6" fill="none"/></pattern><pattern id="tiles" patternUnits="userSpaceOnUse" width="22" height="22"><path d="M0 0H22V22H0Z" stroke="#acbec5" stroke-width=".7" fill="none"/></pattern></defs><g>${body}</g>${dimensions}</svg>`;
     if(!this.exporting){

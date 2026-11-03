@@ -5,7 +5,7 @@ Claude Code loads project skills from `.claude/skills/<name>/SKILL.md`. It picks
 | Skill | Use it for | Extras |
 |---|---|---|
 | [romly-run](../.claude/skills/romly-run/SKILL.md) | Starting the dev server or a local production build | |
-| [romly-browser-qa](../.claude/skills/romly-browser-qa/SKILL.md) | Checking the app in headless Chrome, locally, on staging or in production | `smoke.mjs` (end-to-end smoke test), `plan-version.mjs` (old and newer plan formats), `walls.mjs` (wall status and load-bearing), `qa-harness.mjs` (for new checks) |
+| [romly-browser-qa](../.claude/skills/romly-browser-qa/SKILL.md) | Checking the app in headless Chrome, locally, on staging or in production | `smoke.mjs` (end-to-end smoke test), `plan-version.mjs` (old and newer plan formats), `walls.mjs` (wall status and load-bearing), `baseline.mjs` ("Dagens planløsning"), `qa-harness.mjs` (for new checks) |
 | [romly-studio](../.claude/skills/romly-studio/SKILL.md) | Changing the studio, the plan model or the public pages: file map, conventions, files that must change together | |
 | [romly-tek17](../.claude/skills/romly-tek17/SKILL.md) | Adding or changing TEK17 rules, inputs and wording | |
 | [romly-ship](../.claude/skills/romly-ship/SKILL.md) | Branch, checks, commit, PR, merge, deploy and verify | `gh-runs.mjs` (GitHub Actions status without the gh CLI) |
