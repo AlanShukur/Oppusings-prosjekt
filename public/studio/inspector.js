@@ -1,6 +1,7 @@
 // The rooms list and the Egenskaper panels for the selected room, element or wall.
 import { icon, $, toast, compactWorkspace, setWorkspacePanel } from './ui.js';
 import { esc, fmt, decimal, singleLine, inputNumber } from './format.js';
+import { FURNITURE, FURNITURE_LIMITS, furnitureSize } from './furniture.js';
 import { studio, editor } from './state.js';
 import { updateWorkflowProgress } from './workflow.js';
 import { setTool } from './tools.js';
@@ -30,19 +31,23 @@ export function selectRoom(r){
   for(const el of document.querySelectorAll('#room-name,#room-width,#room-height,#room-type,[data-material],#rename-room,#room-ceiling,#room-previous-use'))el.disabled=!r;
   document.querySelectorAll('.material').forEach(b=>b.classList.toggle('active',b.dataset.material===r?.color));renderRooms();
 }
-const ITEM_NAMES={window:'Vindu',door:'Dør',sofa:'Sofa',table:'Bord',bed:'Seng',plant:'Plante',wall:'Skillevegg'};
+const ITEM_NAMES={window:'Vindu',door:'Dør',wall:'Skillevegg'};
 let shownItem=null;
 export function showItem(item){
   shownItem=item;const panel=$('#item-properties');panel.hidden=!item;if(!item)return;
-  const opening=item.type==='door'||item.type==='window';
-  $('#item-title').textContent=ITEM_NAMES[item.type]||'Element';$('#item-warning').hidden=!item.detached;
-  $('#item-rotate-label').textContent=opening?'Snu':'Roter 90°';
+  const opening=item.type==='door'||item.type==='window',piece=FURNITURE[item.type],problems=item.problems||[];
+  $('#item-title').textContent=piece?.name||ITEM_NAMES[item.type]||'Element';
+  $('#item-warning').hidden=!item.detached&&!problems.length;$('#item-warning').textContent=item.detached?'Står ikke på en vegg':item.type==='door'?'Noe står i veien':'Sjekk plasseringen';
+  $('#item-rotate-label').textContent=item.type==='door'?'Slå andre veien':opening?'Snu':'Roter 90°';
+  $('#item-mirror').hidden=item.type!=='door';
   $('#item-opening-fields').hidden=!opening;
+  $('#item-furniture-fields').hidden=!piece;
+  if(piece){const size=furnitureSize(item);for(const [id,key] of [['item-furniture-width','width'],['item-furniture-depth','depth']])if(document.activeElement!==$('#'+id))$('#'+id).value=inputNumber(size[key]);}
   panel.querySelectorAll('[data-window-only]').forEach(el=>el.hidden=item.type!=='window');panel.querySelectorAll('[data-door-only]').forEach(el=>el.hidden=item.type!=='door');
   $('#item-width-label').textContent=item.type==='door'?'Fri bredde':'Glassbredde';
   for(const [id,key] of [['item-width','width'],['item-height','height'],['item-sill','sillHeight']])if(document.activeElement!==$('#'+id))$('#'+id).value=Number.isFinite(item[key])?inputNumber(item[key]):'';
   $('#item-escape').checked=!!item.escape;$('#item-entrance').checked=!!item.entrance;
-  $('#item-hint').textContent=item.detached?'Dra elementet inntil en vegg. Ellers telles det ikke i 3D eller i prosjektkontrollen.':opening?'Målene brukes i prosjektkontrollen (dagslys, utsyn, dørbredde og rømning). Tomme felt regnes som ukjent.':'Q/E roterer, Ctrl+D dupliserer, piltaster flytter.';
+  $('#item-hint').textContent=item.detached?'Dra elementet inntil en vegg. Ellers telles det ikke i 3D eller i prosjektkontrollen.':[...problems,opening?'Målene brukes i prosjektkontrollen (dagslys, utsyn, dørbredde og rømning). Tomme felt regnes som ukjent.':'Mål i meter. Q/E roterer, Ctrl+D dupliserer, piltaster flytter.'].join(' ');
 }
 let shownWall=null;
 export function showWall(wall){
@@ -65,6 +70,8 @@ export function bindInspector(){
   $('#item-duplicate').onclick=()=>{if(editor.duplicateSelected())toast('Elementet er duplisert.');};
   $('#item-delete').onclick=()=>editor.removeSelected();
   for(const [id,key] of [['item-width','width'],['item-height','height'],['item-sill','sillHeight']])$('#'+id).addEventListener('change',e=>{if(!shownItem)return;const value=decimal(e.target.value);if(value!==null&&!Number.isFinite(value)){toast('Skriv målet i meter, for eksempel 1,2.');showItem(shownItem);return;}const before=shownItem[key];editor.updateItem(shownItem.id,{[key]:value});const after=editor.selectedItemState();if(after&&value!==null&&after[key]===before)toast('Målet er utenfor det som er mulig for dette elementet.');if(after)showItem({...after,detached:shownItem.detached});});
+  $('#item-mirror').onclick=()=>editor.mirrorSelected();
+  for(const [id,key] of [['item-furniture-width','width'],['item-furniture-depth','depth']])$('#'+id).addEventListener('change',e=>{if(!shownItem)return;const value=decimal(e.target.value),[min,max]=FURNITURE_LIMITS;if(!Number.isFinite(value)||value<min||value>max){toast(`Skriv et mål mellom ${fmt(min)} og ${fmt(max)} meter, for eksempel 1,6.`);showItem(shownItem);return;}if(!editor.updateItem(shownItem.id,{[key]:value}))showItem(shownItem);});
   $('#item-escape').onchange=e=>shownItem&&editor.updateItem(shownItem.id,{escape:e.target.checked});
   $('#item-entrance').onchange=e=>shownItem&&editor.updateItem(shownItem.id,{entrance:e.target.checked});
   $('#wall-status').onchange=e=>shownWall&&editor.updateWall(shownWall.key,{status:e.target.value});

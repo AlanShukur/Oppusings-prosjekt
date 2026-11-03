@@ -1,5 +1,5 @@
 // The open project: saving, switching projects safely, recovery, save problems and startup.
-import { migratePlan } from './plan.js';
+import { migratePlan, ITEM_TYPES } from './plan.js';
 import { ProjectSync, isRevisionConflict } from './cloud.js';
 import { reportProblem } from './error-reporter.js';
 import { icon, $, toast, download } from './ui.js';
@@ -15,7 +15,7 @@ export const sync=new ProjectSync(renderSaveStatus,{client:api,where:'på denne 
 const storageAvailable=(()=>{try{localStorage.setItem('romly-test','1');localStorage.removeItem('romly-test');return true;}catch{return false;}})();
 function safeProjectJSON(text){
   const data=JSON.parse(text);
-  const types=['window','door','plant','sofa','table','bed','wall'];
+  const types=ITEM_TYPES;
   if(!data?.project||typeof data.project.name!=='string'||typeof data.project.wishes!=='string'||!['01','02','03'].includes(data.project.variant)||!Number.isInteger(data.project.bedrooms)||data.project.bedrooms<1||data.project.bedrooms>5||!Number.isInteger(data.project.bathrooms)||data.project.bathrooms<1||data.project.bathrooms>3)throw Error('Ugyldig prosjekt');
   if(!Array.isArray(data.plan?.items)||data.plan.items.length>300||!data.plan.items.every(item=>typeof item.id==='string'&&types.includes(item.type)&&['x','y','rotation'].every(k=>Number.isFinite(item[k])&&Math.abs(item[k])<10000)&&['x2','y2'].every(k=>item[k]===undefined||(Number.isFinite(item[k])&&Math.abs(item[k])<10000))))throw Error('Ugyldige elementer');
   return data;

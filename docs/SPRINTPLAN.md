@@ -105,8 +105,9 @@ Waiting on you:
   - walls with existing/new/demolish status and load-bearing marks that survive resizes, and check rules for them;
   - the "Dagens planløsning" baseline with comparison;
   - the acceptance scenario below;
-  - `app.js` split into a short entry file and 18 modules, with the project brief as a pure, tested module and a browser check that opens every dialog (`dialogs.mjs`).
-- **Remaining:** furniture sizes, the hinge flag and the overlap check; pinch zoom and accessibility; Playwright tests for pointer and touch.
+  - `app.js` split into a short entry file and 18 modules, with the project brief as a pure, tested module and a browser check that opens every dialog (`dialogs.mjs`);
+  - 16 pieces of furniture with real, editable sizes (plan format 4), a door hinge-side flag, and an overlap check for walls, door swings and other furniture. A room you furnish drops its automatic furniture (part of ED-13).
+- **Remaining:** pinch zoom and accessibility; Playwright tests for pointer and touch.
 
 - `plan.schemaVersion` and migrations (M-1, API-1).
 - Walls become their own entities with *existing / new / demolish* status and a *load-bearing yes/no/unknown* flag. Wall annotations survive a resize (ED-16, TEK-M3).

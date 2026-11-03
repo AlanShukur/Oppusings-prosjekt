@@ -353,17 +353,52 @@ class Plan3DViewer {
         box(w, 0.31, d, 0, 0.3, 0, PALETTE.sage);
         box(w, 0.54, 0.17, 0, 0.61, -d / 2 + 0.08, PALETTE.sage);
         for (const x of [-w / 2 + 0.08, w / 2 - 0.08]) box(0.16, 0.43, d, x, 0.51, 0, PALETTE.sage);
-        for (let i = 0; i < 3; i++) box((w - 0.36) / 3 - 0.025, 0.16, d - 0.21, -w / 2 + 0.18 + (i + 0.5) * (w - 0.36) / 3, 0.54, 0.055, PALETTE.cushion);
-        box(0.36, 0.35, 0.15, -w * 0.29, 0.75, -d * 0.21, '#f2e8d6');
-        box(0.32, 0.32, 0.14, w * 0.3, 0.74, -d * 0.21, '#c4b591');
+      {
+        const seats = Math.max(1, Math.round((w - 0.36) / 0.6)), seat = (w - 0.36) / seats;
+        for (let i = 0; i < seats; i++) box(seat - 0.025, 0.16, d - 0.21, -w / 2 + 0.18 + (i + 0.5) * seat, 0.54, 0.055, PALETTE.cushion);
+        if (seats > 1) {
+          box(0.36, 0.35, 0.15, -w * 0.29, 0.75, -d * 0.21, '#f2e8d6');
+          box(0.32, 0.32, 0.14, w * 0.3, 0.74, -d * 0.21, '#c4b591');
+        }
         legs(0.15); break;
+      }
       case 'bed':
         box(w + 0.05, 0.26, d + 0.05, 0, 0.17, 0, PALETTE.paleWood);
         box(w, 0.22, d, 0, 0.4, 0, PALETTE.cream);
         box(w + 0.07, 0.85, 0.1, 0, 0.43, -d / 2 - 0.025, PALETTE.paleWood);
         box(w * 0.98, 0.075, d * 0.72, 0, 0.54, d * 0.14, '#c1cfb2');
-        for (const x of [-w * 0.25, w * 0.25]) box(w * 0.42, 0.1, 0.33, x, 0.56, -d / 2 + 0.25, '#faf7ef');
+        for (const x of w < 1.1 ? [0] : [-w * 0.25, w * 0.25]) box(w < 1.1 ? w * 0.7 : w * 0.42, 0.1, 0.33, x, 0.56, -d / 2 + 0.25, '#faf7ef');
         break;
+      case 'low-table':
+        box(w, 0.05, d, 0, 0.42, 0, PALETTE.oak); legs(0.4, 0.06); break;
+      case 'cabinet': {
+        const height = spec.height || 0.8;
+        box(w, height, d, 0, height / 2, 0, '#e2d9c6');
+        box(w + 0.01, 0.012, 0.012, 0, height - 0.06, d / 2, '#c4b99f', false);
+        if (height > 1.2) for (let shelf = 1; shelf < Math.round(height / 0.38); shelf++) box(w - 0.04, 0.02, 0.012, 0, shelf * 0.38, d / 2, '#c4b99f', false);
+        break;
+      }
+      case 'closet': {
+        box(w, 2.02, d, 0, 1.01, 0, '#ddd4c1');
+        const doors = Math.max(2, Math.round(w / 0.5));
+        for (let i = 1; i < doors; i++) box(0.014, 1.94, 0.012, -w / 2 + i * w / doors, 1.02, d / 2, '#c4b99f', false);
+        break;
+      }
+      case 'round-table': {
+        const top = this.cylinder(group, 0.5, 0.5, 0.05, 0, 0.76, 0, PALETTE.oak, 40); top.scale.set(w, 1, d);
+        this.cylinder(group, 0.05, 0.05, 0.72, 0, 0.37, 0, PALETTE.wood, 12);
+        this.cylinder(group, 0.22, 0.25, 0.03, 0, 0.015, 0, PALETTE.wood, 24);
+        break;
+      }
+      case 'chair':
+        this.addChair(group, 0, 0, Math.PI); break;
+      case 'appliance': {
+        box(w, 0.85, d, 0, 0.425, 0, '#f4f5f1');
+        const door = this.cylinder(group, Math.min(w, 0.85) * 0.3, Math.min(w, 0.85) * 0.3, 0.02, 0, 0.45, d / 2, '#d5dedc', 28);
+        door.rotation.x = Math.PI / 2;
+        box(w * 0.9, 0.06, 0.012, 0, 0.78, d / 2, '#dfe3df', false);
+        break;
+      }
       case 'wardrobe':
         box(w, 2.02, d, 0, 1.01, 0, '#ddd4c1');
         for (let i = 0; i < Math.max(2, Math.round(d / 0.55)); i++) box(w + 0.012, 1.94, 0.014, 0, 1.02, -d / 2 + (i + 0.5) * d / Math.max(2, Math.round(d / 0.55)), '#c4b99f', false);

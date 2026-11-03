@@ -47,6 +47,21 @@ Run this after moving or changing studio UI code. It opens every dialog from its
 
 To download a file, it replaces `URL.createObjectURL` for one call, as `walls.mjs` does. "Importer prosjektfil" builds a detached `<input type=file>`, so the script catches it with a one-time `document.createElement` hook and puts it in the page for `setFiles`. File-chooser interception (`Page.setInterceptFileChooserDialog`) stops any real chooser from opening.
 
+## Furniture check
+
+```bash
+node .claude/skills/romly-browser-qa/furniture.mjs <base-url>
+```
+
+Run this after changing furniture, the overlap check, doors or the Interiør list. It checks:
+- **The list:** the Interiør tab lists all 16 pieces in 4 groups, with sizes.
+- **Sizes:** a new double bed is 1,6 × 2 m; resizing it to 1,8 m changes the drawing; an out-of-range size is refused; the size survives a reload.
+- **Overlaps:** a sofa through a wall and a chair where a door swings get red outlines (`[data-item-problem]`). Egenskaper says why, and the door names the chair.
+- **The door:** «Bytt hengselside» mirrors it. «Slå andre veien» turns it, keeps the hinge end and clears the chair.
+- **3D:** it opens with the furniture.
+
+Restart the dev server before running it if you changed anything 3D imports (see **romly-run**).
+
 ## Plan format check
 
 ```bash

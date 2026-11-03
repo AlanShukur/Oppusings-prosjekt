@@ -57,3 +57,12 @@
 .check-answer button{border:1px solid #d9cdea;background:#fff;border-radius:6px;padding:3px 10px;font-size:11px;cursor:pointer}
 .check-answer button:hover{background:#f5f0fb}
 .info-banner[hidden]{display:none!important}
+.furniture-list{display:flex;flex-direction:column;gap:4px;margin-bottom:16px}
+.furniture-group{font-size:9px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#9a93a6;margin:8px 2px 1px}
+.furniture-group:first-child{margin-top:0}
+.furniture-option{display:flex;align-items:center;gap:9px;width:100%;padding:6px 8px;border:1px solid #e7e3ee;border-radius:7px;background:#fff;text-align:left;cursor:pointer;font:inherit;color:inherit}
+.furniture-option:hover,.furniture-option:focus-visible{border-color:#cdbfe6;background:#faf8fd}
+.furniture-option svg{width:16px;height:16px;flex:none;color:#7961ce}
+.furniture-option strong{display:block;font-size:10.5px;font-weight:600}
+.furniture-option small{display:block;font-size:9px;color:#8c8798}
+@media (max-width:900px){.furniture-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}.furniture-group{grid-column:1/-1}}

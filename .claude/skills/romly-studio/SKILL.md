@@ -19,8 +19,8 @@ Romly is a Norwegian renovation planner. The **studio** (`public/studio/`) is a 
 | `format.js` | Pure helpers: `esc`, `fmt`, `decimal`, `inputNumber`, `singleLine`, `multiLine`, `clone`, `savedDate`. |
 | `dialog.js` | The one modal: `openDialog`, `closeDialog`, and `setDialogCleanup` for a dialog that must release things on close. |
 | `workflow.js` | The four steps along the top (`workflow(step)`) and their progress ticks. |
-| `inspector.js` | The rooms list and the Egenskaper panels for a room, an element or a wall. |
-| `tools.js` | Tools, zoom (`setZoom`, `showZoom`), 2D/3D, layers, "Legg til rom", the keyboard shortcuts and their dialog. |
+| `inspector.js` | The rooms list and the Egenskaper panels for a room, an element (with furniture size and door hinge) or a wall. |
+| `tools.js` | Tools, zoom (`setZoom`, `showZoom`), 2D/3D, layers, the Interiør list (built from `FURNITURE`), "Legg til rom", the keyboard shortcuts and their dialog. |
 | `baseline-ui.js` | The "Dagens planløsning" button and dialog. |
 | `plan-import.js` | Your own floor plan: upload, setting the scale (calibration), and the reference image under the drawing. |
 | `ground.js`, `suggestions.js`, `check-ui.js` | Steps 1, 2 and 4: Grunnlag (details and files), Planforslag (needs and example variants), and Prosjektkontroll (the TEK17 dialog and facts form). |
@@ -33,7 +33,8 @@ Romly is a Norwegian renovation planner. The **studio** (`public/studio/`) is a 
 | File | What it owns |
 |---|---|
 | `plan.js` | `PlanEditor`: the SVG 2D editor. It holds state, tools (select, pan, room, wall, door, window), viewport and zoom, resize, move and snap, and attaching openings to walls. Exports `exampleOpenings`, `upgradeExamplePlan`, `MAX_ROOMS` and `MAX_ITEMS`. |
-| `scene-geometry.js` | Pure geometry: `deriveWalls`, `assignOpenings`, `doorSwing`, `openingOnWall`. 3D, TEK17 and the tests all share it, so fix geometry here, never in a caller. |
+| `scene-geometry.js` | Pure geometry: `deriveWalls`, `assignOpenings`, `doorSwing`, `doorSweep`, `openingOnWall`, `furnitureConflicts` (the overlap check) and `furnishedRoomIds`. 3D, TEK17 and the tests all share it, so fix geometry here, never in a caller. |
+| `furniture.js` | Pure: the furniture catalogue (`FURNITURE`, with name, group, size in metres, 2D/3D `kind` and icon), `furnitureSize`, and `furnitureOutline` for the overlap check. |
 | `plan-diff.js` | Pure comparison with the saved baseline ("Dagens planløsning"): `compareToBaseline(plan)` returns removed and new walls, changed openings, and room overlaps. The editor's ghosts, the TEK17 check and the brief all use it. |
 | `viewer3d.js` | three.js scene, loaded lazily. |
 | `tek17-check.js` | Pure TEK17 engine. Read the **romly-tek17** skill before changing it. |
@@ -56,9 +57,13 @@ Romly is a Norwegian renovation planner. The **studio** (`public/studio/`) is a 
   - Fields: `{id, name, type, x, y, w, h, color, width, height, area}`. `w` and `h` are in units; `width` and `height` are in metres; `area` is in m².
   - Optional: `ceilingHeight` and `previousUse` (`'hoveddel'` or `'tilleggsdel'`).
   - Types: `living`, `bedroom`, `bath`, `hall`, `office`, `kitchen`, `dining`, `storage`, `room`.
-- **Item:** `{id, type, x, y, rotation}`. Types are `window`, `door`, `plant`, `sofa`, `table`, `bed`, `wall`; walls also have `x2` and `y2`.
-  - Doors and windows may also have `width`, `height`, `sillHeight`, `entrance` and `escape`.
+- **Item:** `{id, type, x, y, rotation}`. Types are `window`, `door`, `wall` and the keys of `FURNITURE` (`ITEM_TYPES` in `plan.js`); walls also have `x2` and `y2`.
+  - Doors and windows may also have `width`, `height`, `sillHeight`, `entrance` and `escape`. A door may have `mirrored: true`: the hinge sits at the other end of the opening.
   - The default width is 42 units for a door and 70 for a window. An opening attaches to a wall within 24 units.
+  - **Furniture (version 4):** `width` and `depth` in metres (0,2–4 m), with the back of the piece at local -y. New pieces get the catalogue size; migration 3→4 gave older pieces the size they used to be drawn at (`LEGACY_SIZES`).
+  - **Doors:** «Snu» on a door is «Slå andre veien»: it turns the door 180° and toggles `mirrored`, so the hinge stays at the same end and the leaf opens to the other side. «Bytt hengselside» (`mirrorSelected`) only toggles `mirrored`.
+  - **Overlap check:** `furnitureConflicts` flags furniture that crosses a standing wall (not one marked "rives"), stands in a door's sweep, or overlaps other furniture. Pieces shrink by 1 unit first, so touching is fine. A chair may stand under a table or desk, and a plant on or beside anything. `PlanEditor.itemProblems()` turns the result into the Norwegian messages for the red outline and Egenskaper.
+  - **Automatic furniture:** a room with furniture the user placed drops its automatic furniture in 2D and 3D (`furnishedRoomIds`). Kitchen and bathroom fittings stay.
 - **Project facts:** `project.building` and `project.measures` feed the TEK17 check.
 - **Format version:** saved plans carry `schemaVersion` (`PLAN_VERSION` in `plan.js`; a missing version means 0, from before versioning).
   - `getState()` stamps the version.
@@ -85,6 +90,11 @@ Romly is a Norwegian renovation planner. The **studio** (`public/studio/`) is a 
   - the same sets in `lib/projects-api.mjs`;
   - the `#wall-status` / `#wall-bearing` options in `index.html`;
   - `wallStroke` in `plan.js` and the legend.
+- **A new piece of furniture:**
+  - an entry in `FURNITURE` in `furniture.js`;
+  - the same key in `FURNITURE_TYPES` in `lib/projects-api.mjs` (a test keeps them equal).
+  - **A new `kind`** also needs a 2D symbol in `furnitureSymbol` in `plan.js` and a 3D case in `addFurniture` in `viewer3d.js`.
+  - The Interiør list builds itself from the catalogue. A new icon goes in `paths` in `ui.js`.
 - **A new studio JS file:** nothing to register. `npm run check` (`scripts/check-syntax.mjs`) checks every `.js` file in `public/studio`, and the build copies the folder. Import it from the module that uses it; if it binds handlers, call its `bind…()` from `app.js`.
 - **A change to what a saved plan looks like:** bump `PLAN_VERSION` in `plan.js` and in `lib/projects-api.mjs` (a test keeps them equal). Add a `MIGRATIONS` entry that turns the previous version into the new one, and test it in `tests/plan-version.test.mjs`. Teach `PlanEditor.loadState` and the server validator to keep the new fields. Then run `.claude/skills/romly-browser-qa/plan-version.mjs` against the dev server.
 - **A change to the project or backup format:** update `validateProjectImport` in `projects.js` (JSON import and restore) and `exportAll` in `local-store.js`.
@@ -114,6 +124,6 @@ Romly is a Norwegian renovation planner. The **studio** (`public/studio/`) is a 
 
 - **Running:** `npm test` runs `node --test tests/*.test.mjs`. The server tests use `node:sqlite`.
 - **Editor tests without a DOM:** build an editor from a stub element: `new PlanEditor({innerHTML: '', dataset: {}, style: {}, addEventListener() {}})`.
-- **Pure modules** import directly. The brief, facts and format helpers are tested in `tests/brief.test.mjs`. UI modules touch the DOM when they load, so test them in the browser instead.
+- **Pure modules** import directly. The brief, facts and format helpers are tested in `tests/brief.test.mjs`; furniture, the overlap check and the door hinge in `tests/furniture.test.mjs`. UI modules touch the DOM when they load, so test them in the browser instead.
 - **Regressions:** add a test to `tests/editor-regressions.test.mjs` for each editor bug you fix.
 - **Browser behaviour:** check it with **romly-browser-qa**.
