@@ -31,6 +31,22 @@ It checks:
 
 Screenshots and `results.json` go to `%TEMP%\romly-qa`. Read the PNGs to actually look at the result, and show the user any that matter. The exit code is 0 only when every check passes. Each run uses a fresh temporary Chrome profile, so it never sees the user's own projects and never leaves data behind.
 
+## Dialog check
+
+```bash
+node .claude/skills/romly-browser-qa/dialogs.mjs <base-url>
+```
+
+Run this after moving or changing studio UI code. It opens every dialog from its own button and runs its main action:
+- **Steps 1 and 2:** creating a project, naming it in Grunnlag, and choosing a plan variant in Planforslag.
+- **Small dialogs:** help, shortcuts, the wall advice, inspiration (colours the selected room) and "Legg til rom".
+- **Zoom and tools:** the zoom buttons, and the R and Escape keys.
+- **Export:** SVG, the brief and the project file. Then it imports that file as a new project.
+- **Storage:** the space used, a full backup, and "Slett alle data" with its confirm step. It then restores the backup, deletes one project and opens the other.
+- **Plan import:** uploading a floor plan, marking two points 6 m apart, and using it as the drawing reference.
+
+To download a file, it replaces `URL.createObjectURL` for one call, as `walls.mjs` does. "Importer prosjektfil" builds a detached `<input type=file>`, so the script catches it with a one-time `document.createElement` hook and puts it in the page for `setFiles`. File-chooser interception (`Page.setInterceptFileChooserDialog`) stops any real chooser from opening.
+
 ## Plan format check
 
 ```bash
@@ -77,6 +93,8 @@ On a phone the panel is under the *Egenskaper* tab (`[data-workspace-panel="prop
 ## Writing a new check
 
 Put one-off scripts in the scratchpad and import the harness by absolute path. On Windows that path must be a `file:///` URL: a bare `C:/…` import fails with `ERR_UNSUPPORTED_ESM_URL_SCHEME`. Add a check to `smoke.mjs` only if it should guard every release.
+
+When a new check guards a refactor, run it against staging (the old code) first. If it passes there, a failure on the refactored code points at the change, not at the check.
 
 ```js
 import {openBrowser} from 'file:///C:/Users/alan_/fuckshit/oppussingsApp/Oppusings-prosjekt/romly/.claude/skills/romly-browser-qa/qa-harness.mjs';

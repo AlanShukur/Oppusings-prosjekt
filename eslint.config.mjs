@@ -23,6 +23,12 @@ const eslintConfig = defineConfig([
     rules: { "@next/next/no-html-link-for-pages": "off" },
   },
   {
+    // The studio is plain ES modules with no type check, so a missing or leftover import
+    // would otherwise only show up in the browser.
+    files: ["public/studio/**/*.js"],
+    rules: { "no-undef": "error", "@typescript-eslint/no-unused-vars": "error" },
+  },
+  {
     files: ["components/ui/**/*.{ts,tsx}", "hooks/use-mobile.ts"],
     rules: {
       // These files are vendored verbatim from shadcn@4.17.0. Keep the

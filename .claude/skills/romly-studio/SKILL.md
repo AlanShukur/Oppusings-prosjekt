@@ -9,9 +9,29 @@ Romly is a Norwegian renovation planner. The **studio** (`public/studio/`) is a 
 
 ## Studio files
 
+**The UI**, loaded from `index.html` through `app.js`:
+
 | File | What it owns |
 |---|---|
-| `app.js` | UI wiring: dialogs, the room and item inspectors, keyboard shortcuts, the projects and storage dialogs, the TEK17 check UI (`FACT_QUESTIONS`, `renderCheckResults`, `downloadReport`), import and export. `window.romly` test hooks are on the last line. |
+| `app.js` | Entry point only. It installs crash reporting, creates the editor with its callbacks, calls each module's `bind…()` in order, wires the top bar, sets the `window.romly` test hooks and calls `initializeStorage()`. |
+| `state.js` | Shared state: `studio` (the open project, active record, uploads, selected room, busy and transition flags, save status), `api`, `session`, and the `editor` and `initialPlan` set by `createEditor`. |
+| `ui.js` | `icon`, `icons`, `$`, `toast`, `download`, and the phone workspace tabs (`compactWorkspace`, `setWorkspacePanel`). |
+| `format.js` | Pure helpers: `esc`, `fmt`, `decimal`, `inputNumber`, `singleLine`, `multiLine`, `clone`, `savedDate`. |
+| `dialog.js` | The one modal: `openDialog`, `closeDialog`, and `setDialogCleanup` for a dialog that must release things on close. |
+| `workflow.js` | The four steps along the top (`workflow(step)`) and their progress ticks. |
+| `inspector.js` | The rooms list and the Egenskaper panels for a room, an element or a wall. |
+| `tools.js` | Tools, zoom (`setZoom`, `showZoom`), 2D/3D, layers, "Legg til rom", the keyboard shortcuts and their dialog. |
+| `baseline-ui.js` | The "Dagens planløsning" button and dialog. |
+| `plan-import.js` | Your own floor plan: upload, setting the scale (calibration), and the reference image under the drawing. |
+| `ground.js`, `suggestions.js`, `check-ui.js` | Steps 1, 2 and 4: Grunnlag (details and files), Planforslag (needs and example variants), and Prosjektkontroll (the TEK17 dialog and facts form). |
+| `facts.js`, `brief.js` | Pure: the facts questionnaire (`FACT_QUESTIONS`), and the downloadable project brief (`projectBrief`). |
+| `projects.js` | The open project: `persist`, save status, `withProjectTransition`, opening and creating projects, recovery, save problems, `validateProjectImport` and startup. |
+| `project-dialogs.js`, `export.js`, `help.js` | Mine prosjekter, create and delete, the storage dialog; export and import; help, inspiration and the wall advice. |
+
+**The engine:**
+
+| File | What it owns |
+|---|---|
 | `plan.js` | `PlanEditor`: the SVG 2D editor. It holds state, tools (select, pan, room, wall, door, window), viewport and zoom, resize, move and snap, and attaching openings to walls. Exports `exampleOpenings`, `upgradeExamplePlan`, `MAX_ROOMS` and `MAX_ITEMS`. |
 | `scene-geometry.js` | Pure geometry: `deriveWalls`, `assignOpenings`, `doorSwing`, `openingOnWall`. 3D, TEK17 and the tests all share it, so fix geometry here, never in a caller. |
 | `plan-diff.js` | Pure comparison with the saved baseline ("Dagens planløsning"): `compareToBaseline(plan)` returns removed and new walls, changed openings, and room overlaps. The editor's ghosts, the TEK17 check and the brief all use it. |
@@ -22,6 +42,12 @@ Romly is a Norwegian renovation planner. The **studio** (`public/studio/`) is a 
 | `error-reporter.js` | Sends crash reports to `/api/client-errors`. Bump `RELEASE` when shipping a new sprint. |
 | `reference-loader.js` | Imports PDF and image floor plans (pdf.js). |
 | CSS | `style.css`, `layout.css`, `projects.css`, `import.css` and `studio-extra.css`. New styles go in `studio-extra.css`. |
+
+### How the UI modules fit together
+
+- **Shared state:** imported bindings can't be reassigned, so anything more than one module reassigns lives on `studio` (`studio.project = …`). Keep state that only one module uses as a plain `let` in that module.
+- **No work at import time:** modules only declare things. Event handlers are attached in an exported `bind…()` that `app.js` calls after `installErrorReporting()`, in a fixed order. The modules import each other in cycles (for example `projects.js` ↔ `project-dialogs.js`); that is safe only while nothing calls across modules at the top level.
+- **Imports are checked:** ESLint runs `no-undef` and unused-variable errors on `public/studio/**`, so `npm run lint` catches a missing or leftover import.
 
 ## Plan model
 
@@ -59,24 +85,24 @@ Romly is a Norwegian renovation planner. The **studio** (`public/studio/`) is a 
   - the same sets in `lib/projects-api.mjs`;
   - the `#wall-status` / `#wall-bearing` options in `index.html`;
   - `wallStroke` in `plan.js` and the legend.
-- **A new studio JS file:** add `node --check public/studio/<file>.js` to the `check` script in `package.json`.
+- **A new studio JS file:** nothing to register. `npm run check` (`scripts/check-syntax.mjs`) checks every `.js` file in `public/studio`, and the build copies the folder. Import it from the module that uses it; if it binds handlers, call its `bind…()` from `app.js`.
 - **A change to what a saved plan looks like:** bump `PLAN_VERSION` in `plan.js` and in `lib/projects-api.mjs` (a test keeps them equal). Add a `MIGRATIONS` entry that turns the previous version into the new one, and test it in `tests/plan-version.test.mjs`. Teach `PlanEditor.loadState` and the server validator to keep the new fields. Then run `.claude/skills/romly-browser-qa/plan-version.mjs` against the dev server.
-- **A change to the project or backup format:** update `validateProjectImport` in `app.js` (JSON import and restore) and `exportAll` in `local-store.js`.
+- **A change to the project or backup format:** update `validateProjectImport` in `projects.js` (JSON import and restore) and `exportAll` in `local-store.js`.
 - **A change to storage behaviour:** change `local-store.js` and the server API together, or record why they differ. Their tests are `tests/local-store.test.mjs` and `tests/projects-api.test.mjs`.
 
 ## Conventions
 
 - **Match the file you are in.**
-  - `app.js` and `plan.js` use a dense one-statement-per-line style with short names.
+  - The UI modules and `plan.js` use a dense one-statement-per-line style with short names.
   - `tek17-check.js`, `local-store.js`, `cloud.js` and `scene-geometry.js` are formatted conventionally.
   - Comments are sparse and explain *why*.
 - **UI text is Norwegian bokmål.** Use «» around names in messages ("«Soverom 1» har …").
-  - Numbers use a decimal comma. Inputs are `type="text" inputmode="decimal"` and are parsed with `decimal()` in `app.js`.
+  - Numbers use a decimal comma. Inputs are `type="text" inputmode="decimal"` and are parsed with `decimal()` from `format.js`.
   - Escape user text with `esc()` when building HTML strings.
 - **No sign-in.** Everything is stored on the device. The server code is kept but unused by the studio, so don't delete it: `lib/projects-api.mjs`, `app/api/`, `app/chatgpt-auth.ts`, `db/` and `drizzle/`. Avoid the word "konto" in UI text; say "på denne enheten".
 - **Messages:** use `toast(message)`. The toast is a manual popover, so it shows above open dialogs. Don't move it back to a plain fixed element.
 - **Hidden elements:** CSS `display` overrides the `hidden` attribute. Follow `.item-properties [hidden]{display:none!important}` in `studio-extra.css` when you add a hidden section.
-- **Keyboard shortcuts:** they live in the `keydown` handler near the end of `app.js`. It ignores keys while a dialog is open or focus is in a text field. Single-key actions such as Delete and the arrows also skip focused buttons and links (`onControl`). Keep both guards for new shortcuts.
+- **Keyboard shortcuts:** they live in the `keydown` handler in `bindTools()` in `tools.js`; list a new one in `openShortcuts` there too. It ignores keys while a dialog is open or focus is in a text field. Single-key actions such as Delete and the arrows also skip focused buttons and links (`onControl`). Keep both guards for new shortcuts.
 
 ## Public pages (`app/`, `components/site-chrome.tsx`)
 
@@ -88,6 +114,6 @@ Romly is a Norwegian renovation planner. The **studio** (`public/studio/`) is a 
 
 - **Running:** `npm test` runs `node --test tests/*.test.mjs`. The server tests use `node:sqlite`.
 - **Editor tests without a DOM:** build an editor from a stub element: `new PlanEditor({innerHTML: '', dataset: {}, style: {}, addEventListener() {}})`.
-- **Pure modules** import directly.
+- **Pure modules** import directly. The brief, facts and format helpers are tested in `tests/brief.test.mjs`. UI modules touch the DOM when they load, so test them in the browser instead.
 - **Regressions:** add a test to `tests/editor-regressions.test.mjs` for each editor bug you fix.
 - **Browser behaviour:** check it with **romly-browser-qa**.

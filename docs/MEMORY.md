@@ -9,15 +9,16 @@ Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it sho
   - landing and legal pages;
   - crash reports;
   - staging and production deploys.
-- **Staging:** https://romly-staging.romly.workers.dev. It deploys automatically on every merge to `main`. Last checked 2026-11-03: smoke 13/13, plan-version 10/10 and walls 17/17 on `main` at `3286854` (after PR #8).
+- **Staging:** https://romly-staging.romly.workers.dev. It deploys automatically on every merge to `main`. Last checked 2026-11-03: smoke 13/13, plan-version 10/10, walls 17/17 and baseline 15/15 on `main` at `fcb287c` (after PR #9).
 - **Production:** https://romly.romly.workers.dev has not been deployed yet.
 - **Sprint 2 in progress** (`docs/SPRINTPLAN.md`).
   - Step 1 is merged (PR #6): the plan format version and migrations.
   - Step 2 is merged (PR #7): wall notes (existing/new/demolish, load-bearing yes/no/unknown), the "Vegg" panel, 2D and 3D styling and the legend. `PLAN_VERSION = 2`.
   - Step 3 is merged (PR #8). With it, the sprint's acceptance scenario works on staging: TEK17 check rules for marked walls, and a wall list in the project brief.
-  - Step 4 is in an open PR (branch `sprint-2-baseline`): the "Dagens planløsning" baseline (`PLAN_VERSION = 3`) and the comparison in `plan-diff.js`.
-  - Next steps: split `app.js` (about 700 dense lines), then the rest of Sprint 2 in `docs/SPRINTPLAN.md`.
-- **Tests:** 163 unit tests (`npm test`). Browser checks in `romly-browser-qa`: `smoke.mjs`, `plan-version.mjs`, `walls.mjs` and `baseline.mjs`.
+  - Step 4 is merged (PR #9): the "Dagens planløsning" baseline (`PLAN_VERSION = 3`) and the comparison in `plan-diff.js`.
+  - The `app.js` split is in an open PR (branch `sprint-2-split-app`).
+  - Next steps: the rest of Sprint 2 in `docs/SPRINTPLAN.md` (furniture sizes, hinge and overlap; pinch zoom and accessibility; Playwright).
+- **Tests:** 169 unit tests (`npm test`). Browser checks in `romly-browser-qa`: `smoke.mjs`, `dialogs.mjs`, `plan-version.mjs`, `walls.mjs` and `baseline.mjs`.
 
 ## Decisions
 
@@ -39,24 +40,43 @@ Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it sho
   - **A room less than half a bathroom today** counts as a new bathroom.
   - **A storage room at least half inside a living room or bedroom** counts as a change of use (`soknad`, the existing verified wording).
   - **Stricter only:** the drawing only ever makes questionnaire answers stricter.
+- **Studio modules (2026-11-03):** `app.js` is only the entry point.
+  - **Shared state:** state that more than one module reassigns lives on the `studio` object in `state.js`.
+  - **Startup:** modules attach handlers in `bind…()` functions that `app.js` calls in order, and nothing runs across modules at import time, so the import cycles are safe.
+  - **Lint:** ESLint runs `no-undef` and unused-variable errors on `public/studio/**`.
+  - **Check script:** `npm run check` checks the whole folder (`scripts/check-syntax.mjs`).
 - **Language:** UI text is Norwegian bokmål; docs for the team are in English, except `README.md` and `docs/LEGAL-REVIEW.md`.
 
 ## Waiting on the user
 
-- **Merge the Sprint 2, step 4 PR** (branch `sprint-2-baseline`). After merging, verify the staging deploy and run `smoke.mjs`, `plan-version.mjs`, `walls.mjs` and `baseline.mjs` against staging.
-- **Choose what's next:** splitting `app.js`, or the production deploy.
-
-
-
+- **Merge the `app.js` split PR** (branch `sprint-2-split-app`). After merging, verify the staging deploy and run all five browser checks (`smoke.mjs`, `dialogs.mjs`, `plan-version.mjs`, `walls.mjs`, `baseline.mjs`) against staging.
 - **Production deploy:** run *Actions → Deploy → Run workflow → production* as a new run. Optionally add a required reviewer on the `production` environment.
 - **Legal:** fill in `lib/company.ts` and get the legal review (`docs/LEGAL-REVIEW.md`). The legal pages show a draft notice until `legalReviewed` is true.
 - **Analytics:** decide whether to add any.
 - **Old OpenAI Sites copy:** decide whether to keep or retire it.
-- **Stale branches:** optionally delete `sprint-0-editor-tek17`, `sprint-1-local-first`, `docs-deploy-subdomain`, `fix-landing-links` and `deploy-guard`.
+- **Stale branches:** optionally delete `sprint-0-editor-tek17`, `sprint-1-local-first`, `docs-deploy-subdomain`, `fix-landing-links`, `deploy-guard`, `claude-skills-memory`, `sprint-2-plan-model`, `sprint-2-walls`, `sprint-2-wall-checks` and `sprint-2-baseline` (and `sprint-2-split-app` once merged).
 - **Open request:** fixing what /usage flagged and moving search agents to a cheaper model needs the /usage output first. Show each change before making it.
-- **Stale branches (continued):** `claude-skills-memory`, `sprint-2-plan-model`, `sprint-2-walls` and `sprint-2-wall-checks` can be deleted too.
 
 ## Task log (newest first)
+
+- **2026-11-03:** Split `app.js` into modules, on branch `sprint-2-split-app`. Committed and PR opened.
+  - **How:** the code moved without rewriting, using a one-off script in the scratchpad. The script copied exact line ranges from the committed `app.js`, checked that every line landed once, renamed only the shared state to `studio.…`, and worked out the imports and exports.
+  - **Planned changes:**
+    - removed three dead variables (`activeTool`, `saveTimer`, `previousProject`);
+    - `projectBrief`, `factValue` and `factText` take the project as an argument;
+    - `showZoom` replaces two copied zoom-label lines;
+    - the insight button calls `openInsight`.
+  - **Guards:**
+    - ESLint `no-undef` and unused-variable errors on the studio. On its first run this caught three bugs in the split script.
+    - `scripts/check-syntax.mjs` replaces the hand-written list in the `check` script.
+    - New `tests/brief.test.mjs` (6 tests).
+    - New browser check `dialogs.mjs` (35 checks), which passed against staging (the old code) before testing the split.
+  - **Results:** 169 of 169 unit tests pass; lint has 0 errors; the build passes.
+    - **Dev server:** dialogs 35/35, smoke 13/13, plan-version 10/10, walls 17/17, baseline 15/15, phone tabs 7/7.
+    - **Production preview:** dialogs 35/35, smoke 13/13, baseline 15/15.
+  - **Skills:** studio (module map and rules), TEK17 (`facts.js`, `brief.js`), browser-QA (`dialogs.mjs`, and test a new check on the old code first), and ship (run the checks for what changed).
+
+- **2026-11-03:** PR #9 (Sprint 2, step 4: "Dagens planløsning") merged. Deploy run 41727121480 succeeded. On staging: smoke 13/13, plan-version 10/10, walls 17/17 and baseline 15/15. Local `main` is at `fcb287c`. These memory edits are uncommitted on `main`; they go in with the next branch.
 
 - **2026-11-03:** Sprint 2, step 4, on branch `sprint-2-baseline`. Committed and PR opened.
   - **Comparison and format:** new `plan-diff.js` (`compareToBaseline`). `PLAN_VERSION` is now 3, with a no-op migration from 2.
