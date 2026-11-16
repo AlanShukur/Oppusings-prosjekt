@@ -20,6 +20,8 @@ npm run test:e2e                            # Playwright: pointer, keyboard and 
 ```
 
 - **CI:** the "Browser checks" job runs both on every PR and on `main`. A new check script must be added to `CHECKS` in `scripts/browser-checks.mjs`, or CI won't run it.
+- **Reading a CI failure:** the job log needs a GitHub login, but the runner writes each failing check as an error annotation. Read them from the public API: find the "Browser checks" check run under `/commits/<sha>/check-runs`, then `/check-runs/<id>/annotations`.
+- **Fonts differ on CI:** GitHub's Linux runners use a wider font than Windows. A layout that only just fits locally can overlap there, as the phone step bar did. To reproduce locally, enlarge the text's `font-size` by 25 % in the page and look for the overlap.
 - **Playwright (`e2e/`):** use it for behaviour that must hold in Firefox and Safari's engine. The checks in this skill use Chrome only.
   - It starts its own dev server on port 5176; set `ROMLY_URL` to test a running site.
   - Playwright has multi-touch only in Chromium. In WebKit the pinch test sends touch pointer events to `#floorplan`. Send them to the container, not the SVG inside it: the editor replaces the SVG on every render.

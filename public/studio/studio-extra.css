@@ -78,3 +78,5 @@
 .wall-row small{font-size:11px;color:#686b76;white-space:nowrap}
 .wall-row .wall-flags{color:#a8403a}
 .room-walls[hidden]{display:none!important}
+/* Phone step bar: each step is at least as wide as its label, so wider system fonts don't push a label into the next step. */
+@media (max-width:650px){.workflow{grid-template-columns:repeat(4,minmax(min-content,1fr))}.workflow-step .step-copy strong{white-space:nowrap}}

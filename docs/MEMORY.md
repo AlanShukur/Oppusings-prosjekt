@@ -81,6 +81,7 @@ Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it sho
   - **CI:** new "Browser checks" job in `ci.yml`. Not yet proven on GitHub's Linux runners; the PR run is the first.
   - **Lockfile:** npm re-indented all of `package-lock.json`; the formatting was restored so the diff is 46 lines.
   - **First CI run failed** in `npm run test:browser` after about 50 seconds. The job log needs a GitHub login, so the runner now writes each failing check as an `::error` annotation, which the public API returns. The Playwright steps now run even when the Chrome checks fail.
+  - **Second CI run:** Playwright passed on Linux in all engines, and 7 of 8 Chrome checks passed. `a11y` failed on phone width: Linux's wider font pushed the step label "Prosjektkontroll" into the next step. Reproduced locally by widening the labels 25 %, and fixed in CSS (each step is at least as wide as its label).
   - **Stop hook:** it only counts Edit and Write calls, so a `MEMORY.md` update made through a shell script looks like no update. Edit this file with the Edit tool.
 
 - **2026-11-16:** PR #13 (step 6b: pinch zoom and keyboard access) merged.
