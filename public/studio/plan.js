@@ -162,11 +162,12 @@ export class PlanEditor {
     this.wallStart=null;this.wallEnd=null;
     this.roomStart=null;this.roomEnd=null;this.referenceImage=null;
     this.viewer=null;this.viewGeneration=0;this.renderFrame=null;this.renderCount=0;this.itemSignature='';this.exporting=false;
+    this.touches=new Map();this.touchStart=null;
     this.render();
     this.container.addEventListener('pointerdown',event=>this.pointerDown(event));
     this.container.addEventListener('pointermove',event=>this.pointerMove(event));
     this.container.addEventListener('pointerup',event=>this.pointerUp(event));
-    this.container.addEventListener('pointercancel',()=>this.cancelPointer());
+    this.container.addEventListener('pointercancel',event=>this.cancelPointer(event));
     this.container.addEventListener('wheel',event=>this.wheel(event),{passive:false});
   }
 
@@ -397,6 +398,13 @@ export class PlanEditor {
     if(this.selected&&(this.state.variant==='custom'||!EXAMPLE_ROOM_IDS.includes(this.selected))){this.checkpoint();this.state.rooms=this.state.rooms.filter(room=>room.id!==this.selected);this.selected=this.state.rooms[0]?.id;this.render();this.notify();return true;}
     return false;
   }
+  selectItem(id){if(!this.state.items.some(item=>item.id===id))return false;this.selectedItem=id;this.selectedWall=null;this.render();return true;}
+  /** Keyboard access: steps the selection through the doors, windows, furniture and partition walls. */
+  selectNextItem(step=1){
+    const items=this.state.items,count=items.length;if(!count)return false;
+    const index=items.findIndex(item=>item.id===this.selectedItem);
+    return this.selectItem(items[index<0?(step>0?0:count-1):(index+step+count)%count].id);
+  }
   selectedItemState(){const item=this.state.items.find(item=>item.id===this.selectedItem);return item?clone(item):null;}
   clearItemSelection(){if(!this.selectedItem&&!this.selectedWall)return false;this.selectedItem=null;this.selectedWall=null;this.render();return true;}
   /** The saved note for a wall key, or the default when none is saved. */
@@ -543,8 +551,43 @@ export class PlanEditor {
     this.drag={type:'pan',pointerId:event.pointerId,clientX:event.clientX,clientY:event.clientY,cx:viewport.cx,cy:viewport.cy,ppu:this.pixelsPerUnit()};
     this.capture(event);this.container.style.cursor='grabbing';
   }
+  /**
+   * Touch: one finger draws, drags and pans as a mouse does; a second finger turns the gesture into a pinch that
+   * zooms and pans. A pinch never changes the drawing: whatever the first finger started is put back.
+   */
+  touchDown(event){
+    this.touches.set(event.pointerId,{x:event.clientX,y:event.clientY});this.capture(event);
+    if(this.touches.size===1){this.touchStart={state:this.getState(),history:this.history.length,future:this.future,wallStart:this.wallStart,wallEnd:this.wallEnd,roomStart:this.roomStart,roomEnd:this.roomEnd,selected:this.selected,selectedItem:this.selectedItem,selectedWall:this.selectedWall};return false;}
+    if(this.touches.size===2)this.startPinch();
+    return true;
+  }
+  startPinch(){
+    const before=this.touchStart,changed=before&&this.history.length>before.history;
+    if(before){
+      if(changed){this.state=before.state;this.history.length=before.history;this.future=before.future;}
+      Object.assign(this,{wallStart:before.wallStart,wallEnd:before.wallEnd,roomStart:before.roomStart,roomEnd:before.roomEnd,selected:before.selected,selectedItem:before.selectedItem,selectedWall:before.selectedWall});
+    }
+    const [a,b]=[...this.touches.values()],mid={clientX:(a.x+b.x)/2,clientY:(a.y+b.y)/2},viewport=this.ensureViewport();
+    this.drag={type:'pinch',distance:Math.max(1,Math.hypot(a.x-b.x,a.y-b.y)),zoom:this.zoom,mid,plan:this.point(mid)||{x:viewport.cx,y:viewport.cy},cx:viewport.cx,cy:viewport.cy,ppu:this.pixelsPerUnit()};
+    this.setCursor();this.flushRender();if(changed)this.notify();
+  }
+  /** Zoom by the change in finger distance, and keep the plan point that was between the fingers between them. */
+  pinchMove(){
+    const [a,b]=[...this.touches.values()],pinch=this.drag;if(!a||!b)return;
+    const zoom=Math.max(25,Math.min(400,pinch.zoom*Math.hypot(a.x-b.x,a.y-b.y)/pinch.distance)),scale=pinch.zoom/zoom,ppu=pinch.ppu/scale,viewport=this.ensureViewport();
+    viewport.cx=pinch.plan.x-((a.x+b.x)/2-pinch.mid.clientX)/ppu-(pinch.plan.x-pinch.cx)*scale;
+    viewport.cy=pinch.plan.y-((a.y+b.y)/2-pinch.mid.clientY)/ppu-(pinch.plan.y-pinch.cy)*scale;
+    this.zoom=zoom;this.onZoom(Math.round(zoom));this.scheduleRender();
+  }
+  touchUp(event){
+    this.touches.delete(event.pointerId);if(!this.touches.size)this.touchStart=null;
+    if(this.drag?.type!=='pinch'||this.touches.size>=2)return this.drag?.type==='pinch';
+    this.drag=null;this.flushRender();return true; // the finger still down does nothing until it is lifted
+  }
   pointerDown(event){
-    if(this.view!=='2d'||this.drag)return; // one gesture at a time; a second finger is ignored
+    if(this.view!=='2d')return;
+    if(event.pointerType==='touch'&&this.touchDown(event))return;
+    if(this.drag)return; // one gesture at a time
     if(event.button===1||(event.button===0&&this.tool==='pan')){this.startPan(event);return;}
     if(event.button!==0)return;
     const point=this.point(event);if(!point)return;
@@ -600,6 +643,8 @@ export class PlanEditor {
   }
   pointerMove(event){
     if(this.view!=='2d')return;
+    if(event.pointerType==='touch'&&this.touches.has(event.pointerId))this.touches.set(event.pointerId,{x:event.clientX,y:event.clientY});
+    if(this.drag?.type==='pinch'){this.pinchMove();return;}
     if(this.drag&&event.pointerId!==undefined&&this.drag.pointerId!==undefined&&event.pointerId!==this.drag.pointerId)return;
     if(this.drag?.type==='pan'){
       const viewport=this.ensureViewport();
@@ -637,6 +682,7 @@ export class PlanEditor {
     this.scheduleRender();
   }
   pointerUp(event){
+    if(event?.pointerType==='touch'&&this.touchUp(event))return;
     if(!this.drag)return;
     if(event&&event.pointerId!==undefined&&this.drag.pointerId!==undefined&&event.pointerId!==this.drag.pointerId)return;
     if(this.drag.type==='pan'){this.drag=null;this.setCursor();this.flushRender();return;}
@@ -650,7 +696,8 @@ export class PlanEditor {
     if(!drag.moved){this.history.pop();this.future=drag.future;this.flushRender();return;}
     this.flushRender();this.notify();
   }
-  cancelPointer(){
+  cancelPointer(event){
+    if(event?.pointerType==='touch'){this.touches.delete(event.pointerId);if(!this.touches.size)this.touchStart=null;}
     if(this.drag?.state){this.state=this.drag.state;this.history.pop();this.future=this.drag.future;}
     if(this.drag?.type==='pan')this.setCursor();
     this.drag=null;this.roomStart=null;this.roomEnd=null;this.wallStart=null;this.wallEnd=null;this.flushRender();

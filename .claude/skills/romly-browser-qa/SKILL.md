@@ -61,6 +61,23 @@ Run this after any CSS change or new UI text. At desktop (1366), tablet (900) an
 
 It skips disabled controls (exempt from contrast rules), SVG text in the drawing, and the toast. A text-size change can push neighbours into each other without clipping anything; the overlap test catches that. Boxes are cut to their scrolling ancestors first, so text scrolled out of a panel doesn't count.
 
+It also skips `.visually-hidden` text, which is for screen readers only.
+
+## Touch and keyboard check
+
+```bash
+node .claude/skills/romly-browser-qa/touch-keyboard.mjs <base-url>
+```
+
+Run this after changing pointer handling in `plan.js`, the keyboard handler, or the elements and wall lists. It checks:
+- **Pinch (phone):** two real touch points (`Input.dispatchTouchEvent`, after `Emulation.setTouchEmulationEnabled`) zoom in and back out, change nothing in the drawing, and don't zoom the page.
+- **Keyboard (desktop):**
+  - the drawing is a tab stop with a name and instructions;
+  - «Elementer i tegningen» selects an element and moves focus to the drawing;
+  - arrows, N / Shift+N, E, Delete, + and - work there;
+  - the live region (`#canvas-status`) announces selections and "Går gjennom en vegg.";
+  - «Vegger i rommet» selects a wall and focuses Status.
+
 ## Furniture check
 
 ```bash
@@ -101,7 +118,7 @@ Run this after changing walls, the 2D editor's click handling or the inspector. 
 - **The TEK17 check:** "Riving av bærende vegg" is reported as needing an application, the downloaded project brief lists the wall under "ENDRINGER I VEGGER", and "Vis i tegningen" selects the wall again.
 - **Resetting:** going back to the default stores nothing.
 
-To read a downloaded file in a check, replace `URL.createObjectURL` for one call and read the Blob's text; `walls.mjs` does this for the brief.
+To read a downloaded file in a check, replace `URL.createObjectURL` for one call and read the Blob's text; `walls.mjs` does this for the brief. The harness refuses real downloads (`Browser.setDownloadBehavior: deny`). Before that, every run saved copies of the brief and SVG into the user's Downloads folder.
 
 ## Baseline check
 

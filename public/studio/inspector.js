@@ -2,6 +2,7 @@
 import { icon, $, toast, compactWorkspace, setWorkspacePanel } from './ui.js';
 import { esc, fmt, decimal, singleLine, inputNumber } from './format.js';
 import { FURNITURE, FURNITURE_LIMITS, furnitureSize } from './furniture.js';
+import { deriveWalls } from './scene-geometry.js';
 import { studio, editor } from './state.js';
 import { updateWorkflowProgress } from './workflow.js';
 import { setTool } from './tools.js';
@@ -29,14 +30,45 @@ export function selectRoom(r){
   $('#room-type').value=r?.type||'room';$('#room-area').textContent=r?fmt(r.area??r.width*r.height)+' m²':'—';$('#selected-room-icon').innerHTML=icon(roomIcon(r));
   $('#room-ceiling').value=r&&Number.isFinite(r.ceilingHeight)?inputNumber(r.ceilingHeight):'';$('#room-ceiling').placeholder=Number.isFinite(studio.project.building?.ceilingHeight)?'Som boligen ('+inputNumber(studio.project.building.ceilingHeight)+')':'Ikke oppgitt';$('#room-previous-use').value=r?.previousUse||'';
   for(const el of document.querySelectorAll('#room-name,#room-width,#room-height,#room-type,[data-material],#rename-room,#room-ceiling,#room-previous-use'))el.disabled=!r;
-  document.querySelectorAll('.material').forEach(b=>b.classList.toggle('active',b.dataset.material===r?.color));renderRooms();
+  document.querySelectorAll('.material').forEach(b=>b.classList.toggle('active',b.dataset.material===r?.color));renderRooms();renderItems();renderRoomWalls();
 }
 const ITEM_NAMES={window:'Vindu',door:'Dør',wall:'Skillevegg'};
-let shownItem=null;
+const itemName=item=>FURNITURE[item.type]?.name||ITEM_NAMES[item.type]||'Element';
+/** Tells screen readers what happened in the drawing (a polite live region). */
+function announce(text){$('#canvas-status').textContent=text;}
+// Keyboard and screen-reader access to the drawing: every placed element as a button, in drawing order.
+function renderItems(){
+  const state=editor?.getState();if(!state)return;
+  const roomOf=item=>state.rooms.find(r=>item.x>=r.x-3&&item.x<=r.x+r.w+3&&item.y>=r.y-3&&item.y<=r.y+r.h+3)?.name;
+  const focused=document.activeElement?.closest?.('#item-list [data-item]')?.dataset.item;
+  $('#item-list-title').textContent=`Elementer i tegningen (${state.items.length})`;
+  $('#item-list').innerHTML=state.items.length?state.items.map(item=>`<button class="room-row ${item.id===shownItem?.id?'active':''}" data-item="${esc(item.id)}" aria-pressed="${item.id===shownItem?.id}"><span class="room-icon">${icon(FURNITURE[item.type]?.icon||item.type)}</span><span class="room-details"><strong>${esc(itemName(item))}</strong><small>${esc(roomOf(item)||'Utenfor rommene')}</small></span></button>`).join(''):'<p class="item-hint">Ingen dører, vinduer eller møbler ennå.</p>';
+  if(focused)$('#item-list').querySelector(`[data-item="${CSS.escape(focused)}"]`)?.focus({preventScroll:true});
+}
+const SIDE_NAMES={top:'Nord',right:'Øst',bottom:'Sør',left:'Vest'};
+// The selected room's walls as buttons, so a wall can be marked without clicking on it in the drawing.
+function renderRoomWalls(){
+  const state=editor?.getState(),room=state?.rooms.find(r=>r.id===studio.selectedId),list=$('#room-wall-list');
+  list.closest('.room-walls').hidden=!room;if(!room){list.innerHTML='';return;}
+  const groups=new Map();
+  for(const wall of deriveWalls(state)){if(wall.source!=='room'||!wall.roomIds.includes(room.id))continue;const group=groups.get(wall.key)||{wall,length:0};group.length+=wall.length;groups.set(wall.key,group);}
+  const focused=document.activeElement?.closest?.('#room-wall-list [data-wall]')?.dataset.wall;
+  list.innerHTML=[...groups.values()].map(({wall,length})=>{
+    const side=wall.key.split('|').find(part=>part.startsWith(room.id+':'))?.slice(room.id.length+1);
+    const others=wall.roomIds.filter(id=>id!==room.id).map(id=>state.rooms.find(r=>r.id===id)?.name).filter(Boolean);
+    const flags=[wall.status==='demolish'?'rives':wall.status==='new'?'ny':'',wall.loadBearing==='yes'?'bærende':''].filter(Boolean).join(', ');
+    return `<button type="button" class="wall-row" data-wall="${esc(wall.key)}" aria-pressed="${wall.key===shownWall?.key}"><span>${SIDE_NAMES[side]||'Vegg'}: ${others.length?'mot '+esc(others.join(' og ')):'yttervegg'}${flags?` <span class="wall-flags">(${flags})</span>`:''}</span><small>${fmt(length/50)} m</small></button>`;
+  }).join('');
+  if(focused)list.querySelector(`[data-wall="${CSS.escape(focused)}"]`)?.focus({preventScroll:true});
+}
+let shownItem=null,announced='';
 export function showItem(item){
-  shownItem=item;const panel=$('#item-properties');panel.hidden=!item;if(!item)return;
+  shownItem=item;renderItems();
+  const spoken=item?item.id+'|'+(item.problems||[]).join(' '):'';
+  if(spoken!==announced){const same=item&&announced.startsWith(item.id+'|');announced=spoken;if(item)announce(same?(item.problems||[]).join(' ')||'Plasseringen er i orden.':`${itemName(item)} valgt. ${(item.problems||[]).join(' ')}`.trim());}
+  const panel=$('#item-properties');panel.hidden=!item;if(!item)return;
   const opening=item.type==='door'||item.type==='window',piece=FURNITURE[item.type],problems=item.problems||[];
-  $('#item-title').textContent=piece?.name||ITEM_NAMES[item.type]||'Element';
+  $('#item-title').textContent=itemName(item);
   $('#item-warning').hidden=!item.detached&&!problems.length;$('#item-warning').textContent=item.detached?'Står ikke på en vegg':item.type==='door'?'Noe står i veien':'Sjekk plasseringen';
   $('#item-rotate-label').textContent=item.type==='door'?'Slå andre veien':opening?'Snu':'Roter 90°';
   $('#item-mirror').hidden=item.type!=='door';
@@ -51,7 +83,8 @@ export function showItem(item){
 }
 let shownWall=null;
 export function showWall(wall){
-  shownWall=wall;const panel=$('#wall-properties');panel.hidden=!wall;if(!wall)return;
+  if(wall&&wall.key!==shownWall?.key)announce(`${wall.partition?'Skillevegg':wall.exterior?'Yttervegg':'Innervegg'} valgt, ${fmt(wall.length)} m.`);
+  shownWall=wall;renderRoomWalls();const panel=$('#wall-properties');panel.hidden=!wall;if(!wall)return;
   $('#wall-title').textContent=wall.partition?'Skillevegg':wall.exterior?'Yttervegg':'Innervegg';$('#wall-length').textContent=fmt(wall.length)+' m';
   $('#wall-between').textContent=wall.partition?'Tegnet med veggverktøyet.':wall.rooms.length>1?`Mellom ${wall.rooms.join(' og ')}`:wall.rooms[0]?`${wall.rooms[0]} – mot det fri`:'';
   $('#wall-status').value=wall.status;$('#wall-bearing').value=wall.loadBearing;
@@ -70,6 +103,10 @@ export function bindInspector(){
   $('#item-duplicate').onclick=()=>{if(editor.duplicateSelected())toast('Elementet er duplisert.');};
   $('#item-delete').onclick=()=>editor.removeSelected();
   for(const [id,key] of [['item-width','width'],['item-height','height'],['item-sill','sillHeight']])$('#'+id).addEventListener('change',e=>{if(!shownItem)return;const value=decimal(e.target.value);if(value!==null&&!Number.isFinite(value)){toast('Skriv målet i meter, for eksempel 1,2.');showItem(shownItem);return;}const before=shownItem[key];editor.updateItem(shownItem.id,{[key]:value});const after=editor.selectedItemState();if(after&&value!==null&&after[key]===before)toast('Målet er utenfor det som er mulig for dette elementet.');if(after)showItem({...after,detached:shownItem.detached});});
+  $('#item-list-heading').onclick=()=>{const expanded=$('#item-list-heading').getAttribute('aria-expanded')==='true';$('#item-list-heading').setAttribute('aria-expanded',!expanded);$('#item-list').classList.toggle('hidden',expanded);};
+  // Choosing an element moves focus to the drawing, where the arrow keys move it. On phones it opens Egenskaper.
+  $('#item-list').addEventListener('click',e=>{const row=e.target.closest('[data-item]');if(!row||!editor.selectItem(row.dataset.item))return;if(compactWorkspace.matches)setWorkspacePanel('properties');else $('#floorplan').focus({preventScroll:true});});
+  $('#room-wall-list').addEventListener('click',e=>{const row=e.target.closest('[data-wall]');if(row&&editor.selectWall(row.dataset.wall))$('#wall-status').focus();});
   $('#item-mirror').onclick=()=>editor.mirrorSelected();
   for(const [id,key] of [['item-furniture-width','width'],['item-furniture-depth','depth']])$('#'+id).addEventListener('change',e=>{if(!shownItem)return;const value=decimal(e.target.value),[min,max]=FURNITURE_LIMITS;if(!Number.isFinite(value)||value<min||value>max){toast(`Skriv et mål mellom ${fmt(min)} og ${fmt(max)} meter, for eksempel 1,6.`);showItem(shownItem);return;}if(!editor.updateItem(shownItem.id,{[key]:value}))showItem(shownItem);});
   $('#item-escape').onchange=e=>shownItem&&editor.updateItem(shownItem.id,{escape:e.target.checked});

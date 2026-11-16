@@ -22,7 +22,7 @@ function openAddRoom(){
   openAddRoomDialog();
 }
 function openAddRoomDialog(){openDialog('Gi plass til et nytt rom','Legg til et rom i skissen. Plassering og tilkomst må vurderes.',`<label class="field">Romnavn<input class="input" id="new-room-name" value="Nytt soverom" maxlength="40"></label><div class="info-banner">${icon('info')}<p>Det nye rommet opprettes som en skissesone. Juster størrelse og kontroller at det passer i planløsningen.</p></div>`,`<button class="button secondary" id="cancel-room">Avbryt</button><button class="button primary" id="confirm-room">${icon('plus')} Legg til rom</button>`);$('#cancel-room').onclick=closeDialog;$('#confirm-room').onclick=()=>{const name=singleLine($('#new-room-name').value).trim()||'Nytt rom';editor.addItem('room');const last=rooms().at(-1);if(last){editor.updateRoom(last.id,{name});editor.selectRoom(last.id);}closeDialog();toast('Rommet er lagt til som en skissesone.');};}
-export function openShortcuts(){openDialog('Litt raskere fra tanke til tegning','Hurtigtaster i designstudioet.',`<div class="shortcut-grid">${[['Velg og flytt','V'],['Tegn rom','R'],['Tegn skillevegger','W'],['Plasser dør','D'],['Plasser vindu','F'],['Panorer','H'],['Zoom','Rullehjul'],['Roter eller snu valgt','Q / E'],['Dupliser valgt','Ctrl + D'],['Flytt valgt','Piltaster (Shift for større steg)'],['Angre','Ctrl + Z'],['Gjør om','Ctrl + Shift + Z'],['Fjern valgt element','Delete'],['Tilbake til velg','Esc']].map(([n,k])=>`<span>${n}</span><kbd>${k}</kbd>`).join('')}</div>`);}
+export function openShortcuts(){openDialog('Litt raskere fra tanke til tegning','Hurtigtaster i designstudioet.',`<div class="shortcut-grid">${[['Velg og flytt','V'],['Tegn rom','R'],['Tegn skillevegger','W'],['Plasser dør','D'],['Plasser vindu','F'],['Panorer','H'],['Zoom','Rullehjul, + / − eller knip med to fingre'],['Velg neste element','N (Shift + N forrige)'],['Roter eller snu valgt','Q / E'],['Dupliser valgt','Ctrl + D'],['Flytt valgt','Piltaster (Shift for større steg)'],['Angre','Ctrl + Z'],['Gjør om','Ctrl + Shift + Z'],['Fjern valgt element','Delete'],['Tilbake til velg','Esc']].map(([n,k])=>`<span>${n}</span><kbd>${k}</kbd>`).join('')}</div>`);}
 /** The Interiør tab: every piece in the catalogue, grouped by room, with its size. */
 function renderFurnitureList(){
   const size=piece=>['plant','round-table'].includes(piece.kind)?`Ø ${Math.round(piece.width*100)} cm`:`${Math.round(piece.width*100)} × ${Math.round(piece.depth*100)} cm`;
@@ -44,11 +44,14 @@ export function bindTools(){
   // Editor shortcuts never fire while a form control has focus; Delete/arrows also leave focused buttons and links alone.
   document.addEventListener('keydown',e=>{
     if(studio.transitioning||dialog.open||e.altKey||/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)||e.target.isContentEditable)return;
-    const onControl=!!e.target.closest?.('button,a,summary,[role="button"],[tabindex]:not(body)');const key=e.key.toLowerCase();
+    const onControl=!!e.target.closest?.('button,a,summary,[role="button"],[tabindex]:not(body):not(#floorplan)');const key=e.key.toLowerCase();
     if((e.ctrlKey||e.metaKey)&&key==='z'){e.preventDefault();e.shiftKey?editor.redo():editor.undo();return;}
     if((e.ctrlKey||e.metaKey)&&key==='d'){if(editor.selectedItemState()){e.preventDefault();if(editor.duplicateSelected())toast('Elementet er duplisert.');}return;}
     if(e.ctrlKey||e.metaKey)return;
     if(key.startsWith('arrow')){if(onControl)return;const step=e.shiftKey?25:5,delta={arrowleft:[-step,0],arrowright:[step,0],arrowup:[0,-step],arrowdown:[0,step]}[key];if(delta&&editor.nudgeSelected(...delta))e.preventDefault();return;}
+    // N steps through the placed elements, so they can be reached without a pointer; + and - zoom.
+    if(key==='n'){if(editor.selectNextItem(e.shiftKey?-1:1))e.preventDefault();return;}
+    if(key==='+'||key==='-'){e.preventDefault();setZoom(Math.round(key==='+'?zoom*1.2:zoom/1.2));return;}
     if(e.repeat)return;
     const shortcuts={r:'room',v:'select',w:'wall',d:'door',f:'window',h:'pan'};
     if(shortcuts[key]){e.preventDefault();setTool(shortcuts[key]);return;}

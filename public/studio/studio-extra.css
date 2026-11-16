@@ -68,3 +68,13 @@
 @media (max-width:900px){.furniture-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}.furniture-group{grid-column:1/-1}}
 /* With 11px text the phone header row no longer fits on one line: the save status gets its own line. */
 @media (max-width:650px){.project-actions{flex-wrap:wrap;row-gap:6px}.project-actions .save-status{flex-basis:100%;margin-right:0}}
+.visually-hidden{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+/* The drawing is a keyboard stop: arrows, Q/E, Delete and Esc act on what is selected. */
+#floorplan:focus{outline:none}#floorplan:focus-visible{outline:2px solid var(--purple-dark);outline-offset:-2px;border-radius:6px}
+.item-list-section{margin-top:4px}.item-list{margin-top:6px}
+.room-wall-list{display:flex;flex-direction:column;gap:4px;margin-top:6px}
+.wall-row{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;padding:7px 9px;border:1px solid #e7e3ee;border-radius:7px;background:#fff;font:inherit;font-size:11px;color:#4f4a5c;text-align:left;cursor:pointer}
+.wall-row:hover,.wall-row:focus-visible,.wall-row[aria-pressed="true"]{border-color:#cdbfe6;background:#faf8fd}
+.wall-row small{font-size:11px;color:#686b76;white-space:nowrap}
+.wall-row .wall-flags{color:#a8403a}
+.room-walls[hidden]{display:none!important}

@@ -88,6 +88,8 @@ export async function openBrowser({base, width = 1366, height = 900, mobile = fa
   };
 
   await send('Runtime.enable'); await send('Page.enable'); await send('Network.enable'); await send('DOM.enable');
+  // Checks read downloaded files through URL.createObjectURL. A real download would land in the user's Downloads folder.
+  await send('Browser.setDownloadBehavior', {behavior: 'deny'}).catch(() => send('Page.setDownloadBehavior', {behavior: 'deny'}));
   await send('Emulation.setDeviceMetricsOverride', {width, height, deviceScaleFactor: 1, mobile});
   return {base, out, send, evaluate, until, go, shot, setFiles, check, finish, errors, apiRequests, results};
 }

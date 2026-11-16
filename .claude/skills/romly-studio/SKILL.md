@@ -113,6 +113,13 @@ Romly is a Norwegian renovation planner. The **studio** (`public/studio/`) is a 
 - **Readable text:** no studio text under 11px, and every text colour at WCAG AA (4.5:1) against its real background. Mid-grey and lilac text on white needs a lightness of about 40% or less; on tinted pills and panels, check the pair. Use `var(--purple-dark)` for purple text, not `var(--purple)`. Run `a11y.mjs` (**romly-browser-qa**) after CSS changes.
 - **Messages:** use `toast(message)`. The toast is a manual popover, so it shows above open dialogs. Don't move it back to a plain fixed element.
 - **Hidden elements:** CSS `display` overrides the `hidden` attribute. Follow `.item-properties [hidden]{display:none!important}` in `studio-extra.css` when you add a hidden section.
+- **Touch:** one finger behaves like the mouse. A second finger starts a pinch (`touchDown`, `startPinch`, `pinchMove` in `plan.js`) that zooms and pans, and first puts back whatever the first finger had started, so a pinch never changes the drawing. Only events with `pointerType: 'touch'` take this path.
+- **The drawing without a pointer:** everything selectable in the drawing must also be reachable as a button.
+  - **Elements:** «Elementer i tegningen» (`renderItems` in `inspector.js`) and the N key (`selectNextItem`).
+  - **Walls:** «Vegger i rommet» (`renderRoomWalls`).
+  - **Rooms:** the rooms list.
+  - **The drawing itself:** `#floorplan` is a tab stop. The key handler's `onControl` guard excludes it, so arrows and Delete work while it has focus.
+  - **Announcements:** selections and placement problems go through `announce()` to the `#canvas-status` live region.
 - **Keyboard shortcuts:** they live in the `keydown` handler in `bindTools()` in `tools.js`; list a new one in `openShortcuts` there too. It ignores keys while a dialog is open or focus is in a text field. Single-key actions such as Delete and the arrows also skip focused buttons and links (`onControl`). Keep both guards for new shortcuts.
 
 ## Public pages (`app/`, `components/site-chrome.tsx`)

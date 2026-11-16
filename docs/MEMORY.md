@@ -9,7 +9,7 @@ Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it sho
   - landing and legal pages;
   - crash reports;
   - staging and production deploys.
-- **Staging:** https://romly-staging.romly.workers.dev. It deploys automatically on every merge to `main`. Last checked 2026-11-04: smoke 13/13, dialogs 35/35, furniture 16/16, plan-version 10/10, walls 17/17 and baseline 15/15 on `main` at `029bce0` (after PR #11).
+- **Staging:** https://romly-staging.romly.workers.dev. It deploys automatically on every merge to `main`. Last checked 2026-11-04: smoke 13/13, dialogs 35/35, furniture 16/16, a11y 71/71, plan-version 10/10, walls 17/17 and baseline 15/15 on `main` at `7907d29` (after PR #12).
 - **Production:** https://romly.romly.workers.dev has not been deployed yet.
 - **Sprint 2 in progress** (`docs/SPRINTPLAN.md`).
   - Step 1 is merged (PR #6): the plan format version and migrations.
@@ -19,10 +19,10 @@ Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it sho
   - The `app.js` split is merged (PR #10): an entry file plus 18 modules.
   - Step 5 is merged (PR #11): furniture with real sizes, the door hinge flag and the overlap check (`PLAN_VERSION = 4`).
   - Step 6 is split into two PRs.
-    - **6a (text and contrast)** is in an open PR (branch `sprint-2-access`).
-    - **6b (pinch zoom and keyboard access to the drawing)** comes next, on its own branch after 6a merges.
+    - **6a (text and contrast)** is merged (PR #12).
+    - **6b (pinch zoom and keyboard access to the drawing)** is in an open PR (branch `sprint-2-touch-keyboard`).
   - After that come the Playwright tests, which finish Sprint 2. Ask the user whether to run the existing CDP browser checks in CI instead of adding Playwright.
-- **Tests:** 180 unit tests (`npm test`). Browser checks in `romly-browser-qa`: `smoke.mjs`, `dialogs.mjs`, `furniture.mjs`, `a11y.mjs`, `plan-version.mjs`, `walls.mjs` and `baseline.mjs`.
+- **Tests:** 186 unit tests (`npm test`). Browser checks in `romly-browser-qa`: `smoke.mjs`, `dialogs.mjs`, `furniture.mjs`, `a11y.mjs`, `touch-keyboard.mjs`, `plan-version.mjs`, `walls.mjs` and `baseline.mjs`.
 
 ## Decisions
 
@@ -62,7 +62,8 @@ Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it sho
 
 ## Waiting on the user
 
-- **Merge the step 6a PR** (branch `sprint-2-access`). After merging, verify the staging deploy and run all seven browser checks against staging (`smoke`, `dialogs`, `furniture`, `a11y`, `plan-version`, `walls`, `baseline`), then start 6b.
+- **Merge the step 6b PR** (branch `sprint-2-touch-keyboard`). After merging, verify the staging deploy and run all eight browser checks against staging.
+- **Playwright or CI:** the last Sprint 2 item is "Playwright tests for pointer and touch". The CDP checks already cover that, so the choice is to add Playwright anyway, or to run the existing checks in CI.
 - **Production deploy:** run *Actions → Deploy → Run workflow → production* as a new run. Optionally add a required reviewer on the `production` environment.
 - **Legal:** fill in `lib/company.ts` and get the legal review (`docs/LEGAL-REVIEW.md`). The legal pages show a draft notice until `legalReviewed` is true.
 - **Analytics:** decide whether to add any.
@@ -71,6 +72,25 @@ Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it sho
 - **Open request:** fixing what /usage flagged and moving search agents to a cheaper model needs the /usage output first. Show each change before making it.
 
 ## Task log (newest first)
+
+- **2026-11-16:** Sprint 2, step 6b, on branch `sprint-2-touch-keyboard`. Committed and PR opened.
+  - **Pinch zoom:** two fingers zoom and pan the 2D drawing. The pinch first undoes whatever the first finger started (a drag, a half-drawn wall or room) and keeps the redo stack.
+  - **Keyboard access:**
+    - the drawing is a tab stop with instructions;
+    - new «Elementer i tegningen» list and «Vegger i rommet» buttons;
+    - new keys: N / Shift+N (next element), + and - (zoom);
+    - a live region announces selections and placement problems.
+  - **Tests:** 6 new unit tests (`tests/touch.test.mjs`); 186 of 186 pass. New `touch-keyboard.mjs` 21/21 with real touch and key events. All other browser checks pass (a11y 71/71 after it learned to skip screen-reader-only text).
+  - **Also in this branch:** the QA harness's download block and the ship skill's PowerShell note.
+
+- **2026-11-04:** PR #12 (step 6a: text and contrast) merged. Deploy run 41739261958 succeeded. On staging: smoke 13/13, dialogs 35/35, furniture 16/16, a11y 71/71, plan-version 10/10, walls 17/17 and baseline 15/15, with no files written to Downloads.
+  - **Git slip:** the first `git switch main` was refused because of uncommitted edits, and the `;`-chained merge then fast-forwarded `sprint-2-access` instead of `main`. It was fixed with a stash, a switch and resetting the branch pointer; nothing was pushed. The ship skill now says how to chain in PowerShell.
+  - **Status:** these edits and the download fix are uncommitted on `main`; they go in with the 6b branch.
+
+- **2026-11-04:** The user found `romly-prosjektbrief (N).txt` files in their Downloads folder.
+  - **Cause:** the browser checks clicked download buttons, and headless Chrome saved real copies. There were 26 files: 19 briefs and 7 SVGs, all from QA runs since 03.11 22:38.
+  - **Fix:** `qa-harness.mjs` now refuses downloads (`Browser.setDownloadBehavior: deny`). `walls.mjs` still passes 17/17, and nothing new lands in Downloads.
+  - **Status:** the fix is uncommitted on `sprint-2-access` and goes in with 6b. The user asked to delete the 26 old files, and they are deleted; no `romly-*` files remain in Downloads.
 
 - **2026-11-04:** Sprint 2, step 6a (text and contrast), on branch `sprint-2-access`. Committed and PR opened.
   - **Audit first:** 56% of desktop text (158 of 282) failed WCAG AA, and 200 texts were under 12px, down to 6px.
