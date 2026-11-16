@@ -59,6 +59,8 @@ node .claude/skills/romly-ship/gh-runs.mjs            # recent runs; find the De
 node .claude/skills/romly-ship/gh-runs.mjs <run-id>   # its steps
 ```
 
+- **Commit messages with double quotes:** in PowerShell, `git commit -m @'…'@` breaks when the message contains `"`; git then reads the rest as a file path and nothing is committed. Write the message to a file in the scratchpad and use `git commit -F <file>`. Check `git log -1` before pushing.
+- **A CI job that fails in seconds with 0 steps** was never started by GitHub. Read the check run's annotations (`/check-runs/<id>/annotations` in the public API) before suspecting the code; on 16.11.2026 it was "account is locked due to a billing issue", which only the user can fix.
 - **Keep the chain:** each step must stop the next when it fails. In PowerShell, `;` does not stop, so use `git switch main; if ($?) { git merge --ff-only origin/main }`. Otherwise a refused switch lets the merge run on the branch you are still on.
   - **Uncommitted edits** that touch files the PR changed make the switch fail. Stash them first, then switch, merge, and `git stash pop`.
 - **Wait for the deploy:** a merge to `main` starts **Deploy** to staging (about 1.5 minutes). Use Monitor with a loop on `gh-runs.mjs`, or wait for the user, rather than sleeping.
