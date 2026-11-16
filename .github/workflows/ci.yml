@@ -52,8 +52,11 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run test:browser
+      # Playwright still runs when a Chrome check fails, so one run reports everything.
       - run: npx playwright install --with-deps chromium firefox webkit
+        if: ${{ !cancelled() }}
       - run: npm run test:e2e
+        if: ${{ !cancelled() }}
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

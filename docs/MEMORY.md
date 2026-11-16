@@ -80,6 +80,7 @@ Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it sho
   - **Playwright:** `e2e/pointer.spec.mjs` (6 tests × 3 engines) and `e2e/touch.spec.mjs` (3 tests × 2 phones). Locally: 23 pass, 1 skipped by design (single-finger drag needs a real touch point, Chromium only), three runs in a row.
   - **CI:** new "Browser checks" job in `ci.yml`. Not yet proven on GitHub's Linux runners; the PR run is the first.
   - **Lockfile:** npm re-indented all of `package-lock.json`; the formatting was restored so the diff is 46 lines.
+  - **First CI run failed** in `npm run test:browser` after about 50 seconds. The job log needs a GitHub login, so the runner now writes each failing check as an `::error` annotation, which the public API returns. The Playwright steps now run even when the Chrome checks fail.
   - **Stop hook:** it only counts Edit and Write calls, so a `MEMORY.md` update made through a shell script looks like no update. Edit this file with the Edit tool.
 
 - **2026-11-16:** PR #13 (step 6b: pinch zoom and keyboard access) merged.
