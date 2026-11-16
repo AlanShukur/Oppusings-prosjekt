@@ -6,7 +6,7 @@ import {mkdir, mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 
-const CHROME = process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
+const CHROME = process.env.CHROME_PATH || {win32: 'C:/Program Files/Google/Chrome/Application/chrome.exe', darwin: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'}[process.platform] || '/usr/bin/google-chrome';
 export const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 export async function openBrowser({base, width = 1366, height = 900, mobile = false, out = join(tmpdir(), 'romly-qa')} = {}) {

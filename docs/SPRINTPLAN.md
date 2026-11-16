@@ -109,7 +109,8 @@ Waiting on you:
   - 16 pieces of furniture with real, editable sizes (plan format 4), a door hinge-side flag, and an overlap check for walls, door swings and other furniture. A room you furnish drops its automatic furniture (part of ED-13).
   - larger text and better contrast (ED-7): no text under 11px and every text colour at WCAG AA, checked by `a11y.mjs`. Before, 56% of the studio's text failed AA and the smallest was 6px.
   - pinch zoom on touch screens, and keyboard access to the drawing (REG-1): the drawing is a tab stop, elements and walls are listed as buttons, and selections are announced to screen readers.
-- **Remaining:** Playwright tests for pointer and touch. The CDP browser checks already cover real clicks, touch and keys, so decide whether Playwright is still wanted, or whether those checks should run in CI instead.
+  - browser tests in CI on every PR: the eight Chrome checks against the production build, and Playwright tests for pointer, keyboard and touch in Chromium, Firefox and WebKit.
+- **Remaining:** nothing. Sprint 2 is complete once this is merged.
 
 - `plan.schemaVersion` and migrations (M-1, API-1).
 - Walls become their own entities with *existing / new / demolish* status and a *load-bearing yes/no/unknown* flag. Wall annotations survive a resize (ED-16, TEK-M3).

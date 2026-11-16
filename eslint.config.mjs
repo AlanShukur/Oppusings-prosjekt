@@ -16,6 +16,8 @@ const eslintConfig = defineConfig([
     "public/studio/vendor/**",
     ".qa/**",
     ".qa-profile/**",
+    "test-results/**",
+    "playwright-report/**",
   ]),
   {
     // vinext 1.0.0-beta.5's <Link> fails to navigate in production builds (RSC prefetch

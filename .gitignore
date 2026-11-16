@@ -18,3 +18,5 @@ next-env.d.ts
 *.pem
 npm-debug.log*
 /public/studio/vendor/
+/test-results/
+/playwright-report/

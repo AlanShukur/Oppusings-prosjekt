@@ -9,7 +9,7 @@ Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it sho
   - landing and legal pages;
   - crash reports;
   - staging and production deploys.
-- **Staging:** https://romly-staging.romly.workers.dev. It deploys automatically on every merge to `main`. Last checked 2026-11-04: smoke 13/13, dialogs 35/35, furniture 16/16, a11y 71/71, plan-version 10/10, walls 17/17 and baseline 15/15 on `main` at `7907d29` (after PR #12).
+- **Staging:** https://romly-staging.romly.workers.dev. It deploys automatically on every merge to `main`. Last checked 2026-11-16: smoke 13/13, dialogs 35/35, furniture 16/16, a11y 71/71, touch-keyboard 21/21, plan-version 10/10, walls 17/17 and baseline 15/15 on `main` at `073de28` (after PR #13).
 - **Production:** https://romly.romly.workers.dev has not been deployed yet.
 - **Sprint 2 in progress** (`docs/SPRINTPLAN.md`).
   - Step 1 is merged (PR #6): the plan format version and migrations.
@@ -20,12 +20,15 @@ Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it sho
   - Step 5 is merged (PR #11): furniture with real sizes, the door hinge flag and the overlap check (`PLAN_VERSION = 4`).
   - Step 6 is split into two PRs.
     - **6a (text and contrast)** is merged (PR #12).
-    - **6b (pinch zoom and keyboard access to the drawing)** is in an open PR (branch `sprint-2-touch-keyboard`).
-  - After that come the Playwright tests, which finish Sprint 2. Ask the user whether to run the existing CDP browser checks in CI instead of adding Playwright.
+    - **6b (pinch zoom and keyboard access to the drawing)** is merged (PR #13).
+  - Step 7 (browser tests in CI, plus Playwright) is in an open PR (branch `sprint-2-browser-ci`). It is the last Sprint 2 item.
 - **Tests:** 186 unit tests (`npm test`). Browser checks in `romly-browser-qa`: `smoke.mjs`, `dialogs.mjs`, `furniture.mjs`, `a11y.mjs`, `touch-keyboard.mjs`, `plan-version.mjs`, `walls.mjs` and `baseline.mjs`.
 
 ## Decisions
 
+- **Browser tests (2026-11-16):** the user chose both options.
+  - **Chrome checks:** the eight CDP checks run in CI through `npm run test:browser` against the production build.
+  - **Playwright:** `npm run test:e2e` covers pointer, keyboard and touch in Chromium, Firefox and WebKit. It is pinned to 1.64.1, chosen because it was more than two weeks old.
 - **No accounts for now (2026-11-02).** Projects and files stay in the browser's IndexedDB. The server API, D1/R2 code and ChatGPT sign-in code are kept but unused.
 - **Plain `<a>` links on the public pages.** vinext 1.0.0-beta.5's `<Link>` breaks navigation in production builds.
 - **Deploys:** staging deploys on merge; production deploys only when the user starts it. Never use "Re-run" on an old Deploy run; a guard step blocks it.
@@ -62,8 +65,7 @@ Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it sho
 
 ## Waiting on the user
 
-- **Merge the step 6b PR** (branch `sprint-2-touch-keyboard`). After merging, verify the staging deploy and run all eight browser checks against staging.
-- **Playwright or CI:** the last Sprint 2 item is "Playwright tests for pointer and touch". The CDP checks already cover that, so the choice is to add Playwright anyway, or to run the existing checks in CI.
+- **Merge the step 7 PR** (branch `sprint-2-browser-ci`) once its "Browser checks" job is green. That job runs on GitHub's Linux runners for the first time in this PR.
 - **Production deploy:** run *Actions → Deploy → Run workflow → production* as a new run. Optionally add a required reviewer on the `production` environment.
 - **Legal:** fill in `lib/company.ts` and get the legal review (`docs/LEGAL-REVIEW.md`). The legal pages show a draft notice until `legalReviewed` is true.
 - **Analytics:** decide whether to add any.
@@ -72,6 +74,20 @@ Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it sho
 - **Open request:** fixing what /usage flagged and moving search agents to a cheaper model needs the /usage output first. Show each change before making it.
 
 ## Task log (newest first)
+
+- **2026-11-16:** Sprint 2, step 7, on branch `sprint-2-browser-ci`. Committed and PR opened.
+  - **Runner:** `scripts/browser-checks.mjs` serves the production build, runs the eight checks and stops the server. Locally: 8 of 8 pass.
+  - **Playwright:** `e2e/pointer.spec.mjs` (6 tests × 3 engines) and `e2e/touch.spec.mjs` (3 tests × 2 phones). Locally: 23 pass, 1 skipped by design (single-finger drag needs a real touch point, Chromium only), three runs in a row.
+  - **CI:** new "Browser checks" job in `ci.yml`. Not yet proven on GitHub's Linux runners; the PR run is the first.
+  - **Lockfile:** npm re-indented all of `package-lock.json`; the formatting was restored so the diff is 46 lines.
+  - **First CI run failed** in `npm run test:browser` after about 50 seconds. The job log needs a GitHub login, so the runner now writes each failing check as an `::error` annotation, which the public API returns. The Playwright steps now run even when the Chrome checks fail.
+  - **Second CI run:** Playwright passed on Linux in all engines, and 7 of 8 Chrome checks passed. `a11y` failed on phone width: Linux's wider font pushed the step label "Prosjektkontroll" into the next step. Reproduced locally by widening the labels 25 %, and fixed in CSS (each step is at least as wide as its label).
+  - **Stop hook:** it only counts Edit and Write calls, so a `MEMORY.md` update made through a shell script looks like no update. Edit this file with the Edit tool.
+
+- **2026-11-16:** PR #13 (step 6b: pinch zoom and keyboard access) merged.
+  - **CI billing lock:** the first CI run failed in 2 seconds with "account is locked due to a billing issue". The user fixed billing; the re-run passed. A job with 0 steps means GitHub did not start it, so read the check-run annotations before suspecting the code.
+  - **Staging:** deploy run 43963633137 succeeded. All eight browser checks pass on staging. Local `main` is at `073de28`.
+  - **Status:** these memory edits are uncommitted on `main`; they go in with the next branch.
 
 - **2026-11-16:** Sprint 2, step 6b, on branch `sprint-2-touch-keyboard`. Committed and PR opened.
   - **Pinch zoom:** two fingers zoom and pan the 2D drawing. The pinch first undoes whatever the first finger started (a drag, a half-drawn wall or room) and keeps the redo stack.

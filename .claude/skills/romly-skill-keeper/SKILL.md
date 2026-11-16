@@ -7,6 +7,8 @@ description: Create a new Romly project skill or fix an existing one. Use at the
 
 Skills live in `.claude/skills/<name>/SKILL.md`, and `docs/SKILLS.md` lists them. A good skill saves the next session from re-deriving what this one learned. A wrong skill is worse than none, so only write down what you verified.
 
+**Use the Edit tool for `docs/MEMORY.md`.** The Stop hook only counts Edit and Write calls. An update made through a shell or Node script is invisible to it, and it sends you back as if the file was never touched.
+
 ## Decide: create, update or skip
 
 - **Update** an existing skill when it was wrong or incomplete, or when the code it describes changed: renamed selectors, files, URLs, commands. Do it in the same task. This is the most common case.

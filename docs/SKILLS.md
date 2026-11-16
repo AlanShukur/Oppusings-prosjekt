@@ -23,6 +23,8 @@ Claude Code loads project skills from `.claude/skills/<name>/SKILL.md`. It picks
 You can run the scripts yourself:
 
 ```bash
+npm run build && npm run test:browser   # every browser check, against a local production build
+npm run test:e2e                         # Playwright: Chromium, Firefox and WebKit
 node .claude/skills/romly-browser-qa/smoke.mjs https://romly-staging.romly.workers.dev
 node .claude/skills/romly-ship/gh-runs.mjs
 ```

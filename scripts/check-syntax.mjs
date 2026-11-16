@@ -4,6 +4,6 @@ import { readdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 
 const studio = readdirSync('public/studio').filter(file => file.endsWith('.js')).map(file => `public/studio/${file}`);
-const files = [...studio, 'scripts/build-studio-assets.mjs', 'scripts/deploy-cloudflare.mjs', 'lib/projects-api.mjs'];
+const files = [...studio, 'scripts/build-studio-assets.mjs', 'scripts/deploy-cloudflare.mjs', 'scripts/browser-checks.mjs', 'lib/projects-api.mjs'];
 for (const file of files) execFileSync(process.execPath, ['--check', file], { stdio: 'inherit' });
 console.log(`Syntax OK in ${files.length} files.`);
