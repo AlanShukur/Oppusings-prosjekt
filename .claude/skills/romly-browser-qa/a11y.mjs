@@ -29,7 +29,7 @@ const AUDIT = `(() => {
   const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT);
   while (walker.nextNode()) {
     const node = walker.currentNode, el = node.parentElement;
-    if (!node.textContent.trim() || !el || el.closest('svg, script, style, #toast, :disabled, [aria-disabled="true"]')) continue;
+    if (!node.textContent.trim() || !el || el.closest('svg, script, style, #toast, .visually-hidden, :disabled, [aria-disabled="true"]')) continue;
     if (!el.checkVisibility({opacityProperty: true, visibilityProperty: true})) continue;
     const range = document.createRange(); range.selectNodeContents(node);
     const box = visible(el, range.getBoundingClientRect()); if (!box) continue;
