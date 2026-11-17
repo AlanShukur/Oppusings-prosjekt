@@ -38,8 +38,11 @@ try {
   await clickEl('#first-project-btn');
   await until(`!!document.querySelector('#create-project-submit')`, 'create form');
   await clickEl('#create-project-submit');
+  await until(`${title} === 'Veien til søknad'`, 'the roadmap', 30000);
+  check('a new project opens «Veien til søknad»', true);
+  await clickEl('#roadmap [data-step="ground"] [data-roadmap-action="ground"]');
   await until(`${title} === 'La oss bli kjent med hjemmet ditt'`, 'Grunnlag', 30000);
-  check('a new project opens «Grunnlag»', true);
+  check('the roadmap step opens «Grunnlag»', true);
   await setValue('#project-name-field', 'QA-dialoger');
   check('the project name updates the title', await evaluate(`document.querySelector('#project-title').textContent === 'QA-dialoger'`));
   await clickEl('#ground-next');
@@ -123,7 +126,7 @@ try {
   await until(`${title} === 'Mine prosjekter' && document.querySelectorAll('[data-open-project]').length === 1`, 'one project left', 15000)
     .then(() => check('deleting a project removes it from the list', true), e => check('deleting a project removes it from the list', false, e.message));
   await clickEl('[data-open-project]');
-  await until(`!!romly.getActiveRecord() && !document.querySelector('#app-dialog').open`, 'project opened', 15000)
+  await until(`!!romly.getActiveRecord() && ${title} === 'Veien til søknad'`, 'project opened on its roadmap', 15000)
     .then(() => check('a project opens from the list', true), e => check('a project opens from the list', false, e.message));
 
   // Import a floor plan: upload, mark two points 6 m apart, use it as the drawing reference.

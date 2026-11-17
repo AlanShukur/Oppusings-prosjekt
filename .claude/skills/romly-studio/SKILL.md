@@ -24,6 +24,7 @@ Romly is a Norwegian renovation planner. The **studio** (`public/studio/`) is a 
 | `baseline-ui.js` | The "Dagens planløsning" button and dialog. |
 | `plan-import.js` | Your own floor plan: upload, setting the scale (calibration), and the reference image under the drawing. |
 | `ground.js`, `suggestions.js`, `check-ui.js` | Steps 1, 2 and 4: Grunnlag (details and files), Planforslag (needs and example variants), and Prosjektkontroll (the TEK17 dialog and facts form). |
+| `roadmap.js`, `roadmap-ui.js` | The roadmap to «Send søknad»: `buildRoadmap` (pure: steps, status, the branch after the check) and the start screen that draws it, plus the «Send søknad» hand-off. A project opens on it (`applyCloudRecord` calls `openRoadmap`), and the header button `#roadmap-btn` shows the progress. |
 | `facts.js`, `brief.js` | Pure: the facts questionnaire (`FACT_QUESTIONS`), and the downloadable project brief (`projectBrief`). |
 | `projects.js` | The open project: `persist`, save status, `withProjectTransition`, opening and creating projects, recovery, save problems, `validateProjectImport` and startup. |
 | `project-dialogs.js`, `export.js`, `help.js` | Mine prosjekter, create and delete, the storage dialog; export and import; help, inspiration and the wall advice. |
@@ -65,6 +66,9 @@ Romly is a Norwegian renovation planner. The **studio** (`public/studio/`) is a 
   - **Overlap check:** `furnitureConflicts` flags furniture that crosses a standing wall (not one marked "rives"), stands in a door's sweep, or overlaps other furniture. Pieces shrink by 1 unit first, so touching is fine. A chair may stand under a table or desk, and a plant on or beside anything. `PlanEditor.itemProblems()` turns the result into the Norwegian messages for the red outline and Egenskaper.
   - **Automatic furniture:** a room with furniture the user placed drops its automatic furniture in 2D and 3D (`furnishedRoomIds`). Kitchen and bathroom fittings stay.
 - **Project facts:** `project.building` and `project.measures` feed the TEK17 check.
+- **Roadmap ticks:** `project.roadmap` holds `true` flags only (`ROADMAP_FLAGS` in `roadmap.js`): `checkSeen` and `briefDownloaded` are set by the app, `professional`, `neighbours` and `sent` by the user. Everything else on the roadmap is read from the plan and the check, never stored.
+  - **The branch:** `roadmapBranch` reads the check. A `soknad` result gives «Krever trolig søknad»; an `ukjent` result from an application rule (`APPLICATION_RULES`) keeps it open; an `advarsel` follows the application steps as «Må avklares»; the check's `exempt` result with nothing open gives «Ser ikke ut til å kreve søknad».
+  - **Wording:** never "godkjent" or "klar til innsending". The last step is a hand-off: Romly sends nothing.
 - **Format version:** saved plans carry `schemaVersion` (`PLAN_VERSION` in `plan.js`; a missing version means 0, from before versioning).
   - `getState()` stamps the version.
   - `loadState()` and `migratePlan()` upgrade older plans through `MIGRATIONS`.
@@ -90,6 +94,8 @@ Romly is a Norwegian renovation planner. The **studio** (`public/studio/`) is a 
   - the same sets in `lib/projects-api.mjs`;
   - the `#wall-status` / `#wall-bearing` options in `index.html`;
   - `wallStroke` in `plan.js` and the legend.
+- **A new roadmap tick:** `ROADMAP_FLAGS` in `roadmap.js`, the same list in `validateProjectPayload` in `lib/projects-api.mjs`, and a test in `tests/roadmap.test.mjs`.
+- **A new TEK17 rule about whether an application is needed:** if it uses a new `ruleId`, add it to `APPLICATION_RULES` in `roadmap.js`, or the roadmap's branch ignores it.
 - **A new piece of furniture:**
   - an entry in `FURNITURE` in `furniture.js`;
   - the same key in `FURNITURE_TYPES` in `lib/projects-api.mjs` (a test keeps them equal).

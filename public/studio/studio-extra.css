@@ -80,3 +80,34 @@
 .room-walls[hidden]{display:none!important}
 /* Phone step bar: each step is at least as wide as its label, so wider system fonts don't push a label into the next step. */
 @media (max-width:650px){.workflow{grid-template-columns:repeat(4,minmax(min-content,1fr))}.workflow-step .step-copy strong{white-space:nowrap}}
+/* The roadmap to «Send søknad» (roadmap-ui.js): a flowchart of steps, splitting in two after the check. */
+#roadmap-btn[hidden]{display:none}
+.roadmap{--line:#d6cdea;display:flex;flex-direction:column;align-items:center}
+.roadmap-progress{align-self:stretch;margin:0 0 12px;padding:9px 12px;border-radius:8px;background:var(--purple-light);color:#4a3d7a;font-size:12px;font-weight:600;text-align:center}
+.roadmap ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;align-items:center;width:100%}
+.roadmap-step{position:relative;display:flex;align-items:center;gap:11px;width:min(100%,540px);padding:8px 12px;margin-bottom:14px;border:1px solid #e3deee;border-radius:10px;background:#fff;text-align:left}
+.roadmap-step::after{content:"";position:absolute;left:50%;bottom:-15px;height:14px;border-left:2px solid var(--line)}
+.roadmap-branch .roadmap-step:last-child{margin-bottom:0}.roadmap-branch .roadmap-step:last-child::after{display:none}
+.roadmap-mark{flex:none;display:grid;place-items:center;width:26px;height:26px;border-radius:50%;border:1.5px solid #cfc8df;font-size:11px;font-weight:600;color:#5d5768;background:#fff}
+.roadmap-mark svg{width:14px;height:14px}
+.roadmap-body{min-width:0;flex:1;display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px}.roadmap-text{flex:1 1 210px;min-width:0}.roadmap-body h3{margin:0 0 1px;font-size:12.5px;color:var(--ink)}.roadmap-body p{margin:0;font-size:11px;line-height:1.45;color:#5d5768}
+.roadmap-actions{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+.roadmap-action{border:1px solid #d9cdea;background:#fff;border-radius:6px;padding:5px 10px;font-size:11px;color:var(--purple-dark);cursor:pointer}
+.roadmap-action:hover,.roadmap-action:focus-visible{background:#f5f0fb}
+.roadmap-step[data-status="done"]{border-color:#bfe0cf;background:#f5faf7}.roadmap-step[data-status="done"] .roadmap-mark{border-color:#2f7f6f;background:#2f7f6f;color:#fff}
+.roadmap-step[data-status="next"]{border-color:var(--purple-dark);box-shadow:0 0 0 3px #7961ce24}.roadmap-step[data-status="next"] .roadmap-mark{border-color:var(--purple-dark);color:var(--purple-dark)}
+.roadmap-end{border-width:2px}
+.roadmap-split-note{margin:0 0 14px;padding:6px 12px;border:1px dashed var(--line);border-radius:999px;font-size:11px;color:#5d5768;text-align:center;position:relative}
+.roadmap-split-note::after{content:"";position:absolute;left:50%;bottom:-15px;height:14px;border-left:2px solid var(--line)}
+.roadmap-split{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:18px;width:100%;padding-top:14px}
+.roadmap-split::before{content:"";position:absolute;top:0;left:25%;right:25%;border-top:2px solid var(--line)}
+.roadmap-branch{position:relative;display:flex;flex-direction:column;align-items:center;min-width:0}
+.roadmap-branch::before{content:"";position:absolute;top:-14px;left:50%;height:14px;border-left:2px solid var(--line)}
+.roadmap-branch-title{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:6px;margin:0 0 14px;padding:6px 12px;border-radius:8px;background:#f1edf9;font-size:12px;color:#4a3d7a;text-align:center;position:relative}
+.roadmap-branch-title .status-pill{margin:0}
+.roadmap-branch-title::after{content:"";position:absolute;left:50%;bottom:-15px;height:14px;border-left:2px solid var(--line)}
+.roadmap-branch[data-active="false"] .roadmap-step,.roadmap-branch[data-active="false"] .roadmap-branch-title{border-style:dashed;background:#fafafb}
+.roadmap-branch[data-active="false"] .roadmap-branch-title{border:1px dashed #d9d6e0}
+.roadmap-links{display:flex;flex-direction:column;gap:6px;margin:0 0 14px;font-size:12px}
+.handoff-files{margin:0 0 16px}.handoff-sent{margin-top:14px;font-size:12px}
+@media (max-width:650px){.roadmap-split{grid-template-columns:1fr;gap:44px}.roadmap-split::before{display:none}.roadmap-branch[data-active="false"]{order:2}.roadmap-branch+.roadmap-branch::before,.roadmap-branch[data-active="false"]::before{display:none}}

@@ -6,7 +6,7 @@ export async function openStudio(page) {
   await page.goto('/studio/index.html');
   await page.locator('#first-project-btn').click();
   await page.locator('#create-project-submit').click();
-  await page.locator('#ground-cancel').click();
+  await page.locator('#roadmap-close').click();
   await expect(page.locator('#app-dialog')).not.toBeVisible();
 }
 

@@ -7,6 +7,7 @@ import { esc, clone } from './format.js';
 import { api, session, studio, editor } from './state.js';
 import { dialog, openDialog, closeDialog } from './dialog.js';
 import { updateWorkflowProgress } from './workflow.js';
+import { openRoadmap } from './roadmap-ui.js';
 import { setTool, setZoom, setView } from './tools.js';
 import { releaseReferenceAsset, resolveReferenceImage } from './plan-import.js';
 import { openStorage, openProjects, openDeleteProject } from './project-dialogs.js';
@@ -77,7 +78,9 @@ async function applyCloudRecord(record,{checkRecovery=true,files}={}){
   }finally{studio.loadingProject=false;}
   closeDialog({force:true});
   resolveReferenceImage(record.plan);
-  if(checkRecovery){const recovery=sync.recovery();if(recovery?.data)openRecovery(recovery);}
+  // A project opens on its roadmap, unless unsaved changes from last time need an answer first.
+  const recovery=checkRecovery?sync.recovery():null;
+  if(recovery?.data)openRecovery(recovery);else openRoadmap();
 }
 export async function openCloudProject(id){
   return withProjectTransition(async()=>{const result=await api.get(id);await applyCloudRecord(result.project,{files:result.files});});

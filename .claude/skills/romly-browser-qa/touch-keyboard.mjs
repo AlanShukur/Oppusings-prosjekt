@@ -11,8 +11,8 @@ const open = async (b) => {
   await evaluate(`document.querySelector('#first-project-btn').click()`);
   await until(`!!document.querySelector('#create-project-submit')`, 'create form');
   await evaluate(`document.querySelector('#create-project-submit').click()`);
-  await until(`!!document.querySelector('#ground-cancel')`, 'Grunnlag', 30000);
-  await evaluate(`document.querySelector('#ground-cancel').click()`);
+  await until(`!!document.querySelector('#roadmap-close')`, 'the roadmap', 30000);
+  await evaluate(`document.querySelector('#roadmap-close').click()`);
   await until(`!document.querySelector('#app-dialog').open`, 'dialog closed');
 };
 let all = true;

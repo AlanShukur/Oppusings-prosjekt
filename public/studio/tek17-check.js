@@ -342,7 +342,7 @@ export function evaluatePlan(plan = {}, project = {}) {
   const entranceCount = doorEntries.filter(entry => entry.item.entrance === true).length;
   if (rooms.filter(isKitchen).length >= 2 && baths.length >= 2 && entranceCount >= 2) add('pbl-20-1', 'SAK10 § 2-2', 'Oppdeling', 'advarsel', 'Planen kan bli vurdert som oppdeling i flere boenheter (egne kjøkken, bad og innganger). Oppdeling er søknadspliktig (pbl § 20-1 g).');
   if (bearingWall === 'nei' && !newBearing.length && !facadeFromDrawing && !convertedStorage.length && measures.facade === false && (measures.useChange === 'nei' || measures.useChange == null && !derivedUseChange)) {
-    add('sak-4-1', 'SAK10 § 4-1 e nr. 1', 'Ikke-bærende vegger', 'ok', 'Ikke-bærende vegger innenfor én branncelle er normalt unntatt søknad, forutsatt at lys, ventilasjon og brannsikring opprettholdes. Unntatte tiltak må likevel oppfylle TEK17.');
+    add('sak-4-1', 'SAK10 § 4-1 e nr. 1', 'Ikke-bærende vegger', 'ok', 'Ikke-bærende vegger innenfor én branncelle er normalt unntatt søknad, forutsatt at lys, ventilasjon og brannsikring opprettholdes. Unntatte tiltak må likevel oppfylle TEK17.', {exempt: true}); // the roadmap reads `exempt` to choose its branch
   }
 
   // Drawing quality notes that change the reliability of the results

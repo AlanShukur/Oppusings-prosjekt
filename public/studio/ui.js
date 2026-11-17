@@ -18,6 +18,7 @@ bed:'<path d="M3 18V7m18 11V7M3 14h18v6M3 20v2m18-2v2M6 14V6h12v8M8 10h3m2 0h3"/
 plant:'<path d="M7 15h10l-2 7H9zM12 15V8M12 11C3 12 3 3 3 3s9-1 9 8ZM12 8C12 1 21 2 21 2s1 8-9 8"/>',
 bath:'<path d="M3 12h18v4a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4zM6 12V5a3 3 0 0 1 6 0M5 22v-2m14 2v-2"/>',
 hall:'<path d="M4 3h16v18H4zM9 3v18m6-10h2"/>',
+route:'<circle cx="6" cy="5" r="2"/><circle cx="18" cy="19" r="2"/><path d="M6 7v3a4 4 0 0 0 4 4h4a4 4 0 0 1 4 3"/>',
 cabinet:'<rect x="4" y="3" width="16" height="18" rx="1"/><path d="M12 3v18M10 12h.01M14 12h.01"/>',
 chair:'<path d="M7 3v9h10V3M7 12v9m10-9v9M7 17h10"/>',
 washer:'<rect x="4" y="2" width="16" height="20" rx="2"/><circle cx="12" cy="13" r="5"/><path d="M7 6h3"/>',

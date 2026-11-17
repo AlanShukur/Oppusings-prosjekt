@@ -72,6 +72,13 @@ for (const [label, width, height, mobile] of [['desktop', 1366, 900, false], ['t
     await evaluate(`document.querySelector('#first-project-btn').click()`);
     await until(`!!document.querySelector('#create-project-submit')`, 'create form');
     await evaluate(`document.querySelector('#create-project-submit').click()`);
+    await until(`!!document.querySelector('#roadmap .roadmap-step')`, 'the roadmap', 30000);
+    await audit('roadmap');
+    await evaluate(`document.querySelector('#roadmap [data-roadmap-action="send"]').click()`);
+    await until(`!!document.querySelector('#handoff-back')`, 'the hand-off');
+    await audit('send søknad');
+    await evaluate(`document.querySelector('#handoff-back').click()`);
+    await evaluate(`document.querySelector('#roadmap [data-step="ground"] [data-roadmap-action="ground"]').click()`);
     await until(`!!document.querySelector('#ground-cancel')`, 'Grunnlag', 30000);
     await audit('Grunnlag');
     await evaluate(`document.querySelector('#ground-cancel').click()`);

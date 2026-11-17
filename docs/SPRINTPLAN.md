@@ -120,20 +120,39 @@ Waiting on you:
 - Split `app.js` into modules: dialogs, projects, check and studio. Add Playwright tests for pointer and touch.
 - *Acceptance:* trace a real plan, mark a wall as removed, and the check asks whether it is load-bearing and flags that an application may be needed.
 
-### Sprint 3: AI floor-plan interpretation (vision step 1)
+### Sprint 3: the roadmap to "Send søknad"
+
+*Added 16.11.2026 at the user's request; the sprints below moved down one number.*
+
+*Status 17.11.2026:* all three steps are built on branch `sprint-3-roadmap` and the acceptance scenario passes in the browser (`roadmap.mjs`). In an open PR, waiting for review and merge.
+
+- **What it is:** a flowchart that is the first thing you see when you open a project. It runs from the start at the top to "Send søknad" at the bottom, shows which steps are needed, and updates as each step is done.
+- **Decided with the user:**
+  - **Placement:** the project start screen in the studio. Each step is clickable and opens the right place.
+  - **Completion:** automatic for steps Romly can see (plan uploaded, rooms drawn, "Dagens planløsning" saved, questions answered, check run); manual ticks for steps outside Romly (nabovarsel, contact with a fagperson).
+  - **Branch:** after the check the chart splits. "Krever trolig søknad" continues to "Send søknad"; "Ser ikke ut til å kreve søknad" ends in its own final step. The check picks the branch and stays indicative.
+  - **Final step:** a hand-off. It gathers the drawings, the brief and a checklist, and links to where applications are really submitted. Romly sends nothing.
+- **Wording:** the roadmap must never say the application is approved or complete. The tiltakshaver is responsible, as in the check.
+- **Steps:**
+  1. A pure `roadmap.js` that works out the steps, their status and the branch from the project, the plan and the check, with unit tests. The application steps are verified against DiBK before they are written.
+  2. The start screen: the flowchart, clickable steps, manual ticks, live updates, phone layout and keyboard access.
+  3. The "Send søknad" hand-off.
+- *Acceptance:* open a new project and see the roadmap with only the first step done. Trace a plan, save today's layout, remove a load-bearing wall and answer the questions: the steps tick off one by one, the chart takes the "krever trolig søknad" branch, and the last step offers the documents and the link to submit.
+
+### Sprint 4: AI floor-plan interpretation (vision step 1)
 - Server endpoint `POST /api/projects/:id/analyze`. It sends the uploaded plan to a vision model and returns rooms, walls, openings and a scale guess with confidence, using the same plan JSON. Quotas per user, cost logging, and stored results (PG-1, PG-7).
 - A correction step: AI results appear as a suggestion over the traced underlay, and the user accepts, adjusts or rejects each one. Nothing is saved without confirmation.
 - Photo import gets rotation, cropping and perspective correction (R3D-3), plus a scale picked from a dimension in the drawing.
 - An evaluation set of 50 Norwegian floor plans, tracking room count, area error and opening recall per release.
 - *Acceptance:* on 80 % of the evaluation plans, a user gets a correct room layout in under 3 minutes of corrections.
 
-### Sprint 4: plan suggestions (vision step 2)
+### Sprint 5: plan suggestions (vision step 2)
 - A rule-based generator working from the baseline: split rooms, change room types, place a new bathroom near the existing wet zone, keep load-bearing walls unless the user allows otherwise (PG-3).
 - Every candidate is scored by the TEK17 engine (utsyn, daylight, turning space, storage) and by your wishes. An AI model explains the trade-offs but never decides compliance.
 - Open a suggestion in the sandbox as an undoable change.
 - *Acceptance:* "one more bedroom" on a typical 3-room flat gives at least two suggestions that pass utsyn and daylight.
 
-### Sprint 5: ready for the municipality (vision step 4)
+### Sprint 6: ready for the municipality (vision step 4)
 - Pick the municipality by kommunenummer and look up the address through the Geonorge address API (TEK-M5). Research APIs for zoning and municipal plan lookups.
 - The application-needed triage is driven by the baseline diff, with the user confirming.
 - A drawing package: PDF at 1:50/1:100 with title block, north arrow and dimensions, showing today's and the new plan side by side. Guidance on what to attach (SAK10 § 5-4) and on notifying neighbours (§ 5-2).
@@ -141,7 +160,7 @@ Waiting on you:
 - Hand-off to an architect or structural engineer with the brief prefilled.
 - *Acceptance:* a non-load-bearing change inside one unit produces a complete PDF package and a clear "probably no application needed" with sources.
 
-### Sprint 6: beta and launch
+### Sprint 7: beta and launch
 - Closed beta with 20–50 households, five moderated usability tests, and fixes from both.
 - Legal review signed off. Pricing live. Performance budget and SEO.
 - Process for keeping the ruleset current: watch DiBK's change history, add a CI test that every rule has a source and a check date, and tie each saved report to the ruleset version it used.
