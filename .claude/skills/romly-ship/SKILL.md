@@ -63,6 +63,7 @@ node .claude/skills/romly-ship/gh-runs.mjs <run-id>   # its steps
 - **A CI job that fails in seconds with 0 steps** was never started by GitHub. Read the check run's annotations (`/check-runs/<id>/annotations` in the public API) before suspecting the code; on 16.11.2026 it was "account is locked due to a billing issue", which only the user can fix.
 - **Keep the chain:** each step must stop the next when it fails. In PowerShell, `;` does not stop, so use `git switch main; if ($?) { git merge --ff-only origin/main }`. Otherwise a refused switch lets the merge run on the branch you are still on.
   - **Uncommitted edits** that touch files the PR changed make the switch fail. Stash them first, then switch, merge, and `git stash pop`.
+- **Poll slowly:** the public API allows 60 anonymous requests per hour, and each `gh-runs.mjs` call uses one or more. Poll every 30 to 60 seconds, not every 15. If the limit is hit, verify the deploy by content instead: fetch a file the PR changed from staging and look for the change.
 - **Wait for the deploy:** a merge to `main` starts **Deploy** to staging (about 1.5 minutes). Use Monitor with a loop on `gh-runs.mjs`, or wait for the user, rather than sleeping.
 - **Then verify the live site:**
   ```bash

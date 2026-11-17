@@ -12,6 +12,7 @@ import { bindGround } from './ground.js';
 import { sync, persist, renderProject, renderSaveStatus, initializeStorage, bindProjects } from './projects.js';
 import { openStorage, openProjects } from './project-dialogs.js';
 import { openExport } from './export.js';
+import { bindRoadmap } from './roadmap-ui.js';
 import { openHelp, openInspiration, openInsight } from './help.js';
 
 installErrorReporting();
@@ -20,7 +21,7 @@ bindWorkspacePanels();
 createEditor($('#floorplan'),{onSelect:selectRoom,onChange:state=>{persist(state);updateWallLegend(state);updateBaselineButton(state);},onViewError:error=>{reportProblem(error,{context:'3d'});setView('2d');toast(error.message||'3D ble avbrutt. Tegningen er åpnet i 2D.');},onNotice:toast,onItemSelect:showItem,onWallSelect:showWall,onZoom:showZoom});
 renderProject();selectRoom(rooms().find(r=>r.id===studio.selectedId)||rooms()[0]);
 renderSaveStatus(studio.lastSaveStatus);
-bindInspector();bindBaseline();bindTools();bindDialog();bindWorkflow();bindPlanImport();bindGround();bindProjects();
+bindInspector();bindBaseline();bindTools();bindDialog();bindWorkflow();bindPlanImport();bindGround();bindProjects();bindRoadmap();
 $('#help-btn').onclick=openHelp;$('#projects-nav').onclick=$('#breadcrumb-home').onclick=openProjects;$('#profile-btn').onclick=openStorage;$('#inspiration-nav').onclick=openInspiration;$('#export-btn').onclick=openExport;$('#check-btn').onclick=$('#summary-check').onclick=()=>workflow(4);$('#new-suggestion').onclick=()=>workflow(2);$('#shortcuts-btn').onclick=openShortcuts;
 $('#floor-info').onclick=()=>toast('Eksempelprosjektet inneholder én etasje. Alle rom vises i denne planen.');
 $('#insight-btn').onclick=openInsight;

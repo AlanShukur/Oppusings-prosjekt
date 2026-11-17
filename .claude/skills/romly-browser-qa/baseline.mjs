@@ -12,8 +12,8 @@ try {
   await evaluate(`document.querySelector('#first-project-btn').click()`);
   await until(`!!document.querySelector('#create-project-submit')`, 'create form');
   await evaluate(`document.querySelector('#create-project-name').value = 'Bod til soverom'; document.querySelector('#create-project-submit').click()`);
-  await until(`!!romly.getActiveRecord() && !!document.querySelector('#ground-cancel')`, 'project created', 30000);
-  await evaluate(`document.querySelector('#ground-cancel').click()`);
+  await until(`!!romly.getActiveRecord() && !!document.querySelector('#roadmap-close')`, 'project created', 30000);
+  await evaluate(`document.querySelector('#roadmap-close').click()`);
 
   // Today's home: Stue and Bod side by side, one window in Stue.
   await evaluate(`(() => {

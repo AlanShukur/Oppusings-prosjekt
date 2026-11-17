@@ -6,7 +6,7 @@ import { existsSync, openSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const CHECKS = ['smoke', 'dialogs', 'furniture', 'a11y', 'touch-keyboard', 'plan-version', 'walls', 'baseline'];
+const CHECKS = ['smoke', 'dialogs', 'roadmap', 'furniture', 'a11y', 'touch-keyboard', 'plan-version', 'walls', 'baseline'];
 const port = 8791;
 let base = process.argv[2], server = null;
 

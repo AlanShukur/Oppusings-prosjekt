@@ -2,16 +2,16 @@
 
 Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it short and current. Put the plan in `docs/SPRINTPLAN.md` and how-to knowledge in skills (`docs/SKILLS.md`), not here.
 
-## Current state (2026-11-02)
+## Current state (2026-11-17)
 
 - **Done:** Sprint 0 (editor fixes, TEK17 check) and Sprint 1 are merged. Sprint 1 covered:
   - on-device storage, with sign-in removed;
   - landing and legal pages;
   - crash reports;
   - staging and production deploys.
-- **Staging:** https://romly-staging.romly.workers.dev. It deploys automatically on every merge to `main`. Last checked 2026-11-16: smoke 13/13, dialogs 35/35, furniture 16/16, a11y 71/71, touch-keyboard 21/21, plan-version 10/10, walls 17/17 and baseline 15/15 on `main` at `073de28` (after PR #13).
+- **Staging:** https://romly-staging.romly.workers.dev. It deploys automatically on every merge to `main`. Last checked 2026-11-16: smoke 13/13, dialogs 35/35, furniture 16/16, a11y 71/71, touch-keyboard 21/21, plan-version 10/10, walls 17/17 and baseline 15/15 on `main` at `620a4cd` (after PR #14).
 - **Production:** https://romly.romly.workers.dev has not been deployed yet.
-- **Sprint 2 in progress** (`docs/SPRINTPLAN.md`).
+- **Sprint 2 is complete** (`docs/SPRINTPLAN.md`):
   - Step 1 is merged (PR #6): the plan format version and migrations.
   - Step 2 is merged (PR #7): wall notes (existing/new/demolish, load-bearing yes/no/unknown), the "Vegg" panel, 2D and 3D styling and the legend. `PLAN_VERSION = 2`.
   - Step 3 is merged (PR #8). With it, the sprint's acceptance scenario works on staging: TEK17 check rules for marked walls, and a wall list in the project brief.
@@ -21,11 +21,17 @@ Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it sho
   - Step 6 is split into two PRs.
     - **6a (text and contrast)** is merged (PR #12).
     - **6b (pinch zoom and keyboard access to the drawing)** is merged (PR #13).
-  - Step 7 (browser tests in CI, plus Playwright) is in an open PR (branch `sprint-2-browser-ci`). It is the last Sprint 2 item.
-- **Tests:** 186 unit tests (`npm test`). Browser checks in `romly-browser-qa`: `smoke.mjs`, `dialogs.mjs`, `furniture.mjs`, `a11y.mjs`, `touch-keyboard.mjs`, `plan-version.mjs`, `walls.mjs` and `baseline.mjs`.
+  - Step 7 (browser tests in CI, plus Playwright) is merged (PR #14). CI now runs the browser checks and Playwright on every PR.
+- **Sprint 3 is the roadmap to "Send søknad"** (added by the user 16.11.2026; AI interpretation moved to Sprint 4). All three steps (logic, start screen, hand-off) are in an open PR (branch `sprint-3-roadmap`).
+- **Tests:** 194 unit tests (`npm test`); 30 Playwright tests (`npm run test:e2e`). Browser checks in `romly-browser-qa`: `smoke.mjs`, `dialogs.mjs`, `roadmap.mjs`, `furniture.mjs`, `a11y.mjs`, `touch-keyboard.mjs`, `plan-version.mjs`, `walls.mjs` and `baseline.mjs`.
 
 ## Decisions
 
+- **Roadmap (2026-11-16):** the user's answers for Sprint 3.
+  - **Placement:** the project start screen in the studio.
+  - **Final step:** "Send søknad" is a hand-off (documents plus a link to where applications are submitted); Romly sends nothing.
+  - **Branch:** the chart splits after the check into "krever trolig søknad" and "ser ikke ut til å kreve søknad".
+  - **Completion:** automatic where Romly can see it, manual ticks for steps outside Romly.
 - **Browser tests (2026-11-16):** the user chose both options.
   - **Chrome checks:** the eight CDP checks run in CI through `npm run test:browser` against the production build.
   - **Playwright:** `npm run test:e2e` covers pointer, keyboard and touch in Chromium, Firefox and WebKit. It is pinned to 1.64.1, chosen because it was more than two weeks old.
@@ -65,7 +71,8 @@ Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it sho
 
 ## Waiting on the user
 
-- **Merge the step 7 PR** (branch `sprint-2-browser-ci`) once its "Browser checks" job is green. That job runs on GitHub's Linux runners for the first time in this PR.
+- **Merge the Sprint 3 PR** (branch `sprint-3-roadmap`) once CI is green. After merging, verify staging with `npm run test:browser -- https://romly-staging.romly.workers.dev`. The production deploy is still open and user-run.
+- **The four-step bar** (Grunnlag → Prosjektkontroll) overlaps with the roadmap. Decide whether to keep it once you have seen the roadmap.
 - **Production deploy:** run *Actions → Deploy → Run workflow → production* as a new run. Optionally add a required reviewer on the `production` environment.
 - **Legal:** fill in `lib/company.ts` and get the legal review (`docs/LEGAL-REVIEW.md`). The legal pages show a draft notice until `legalReviewed` is true.
 - **Analytics:** decide whether to add any.
@@ -75,6 +82,22 @@ Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it sho
 
 ## Task log (newest first)
 
+- **2026-11-17:** Sprint 3, the roadmap to "Send søknad", all three steps on branch `sprint-3-roadmap`. Committed and PR opened.
+  - **Sources:** DiBK's "Send nabovarsel" and "Stegene fra idé til ferdig søknad" pages, checked 16.11.2026: neighbours are notified before applying with at least two weeks' deadline; the receipt goes with the application; larger projects need ansvarlige foretak, and then the ansvarlig søker sends the application.
+  - **Logic:** `roadmap.js` (`buildRoadmap`, `roadmapBranch`), with 8 unit tests. The check marks its exemption result `{exempt: true}`; `project.roadmap` stores the ticks, and the server allows them.
+  - **Start screen:** `roadmap-ui.js`. A project opens on «Veien til søknad»; the header button shows "Veikart · n av m"; each step has a button to the right place; the manual ticks are checkboxes. The branch not taken is dashed and marked «Ikke aktuelt nå».
+  - **Hand-off:** «Send søknad» offers the brief and the drawing, a checklist, the DiBK links, and a «Søknaden er sendt» tick. Romly sends nothing.
+  - **Changed first-run flow:** creating a project opens the roadmap, not Grunnlag. Six browser checks and the Playwright helper were updated.
+  - **Bug found by the browser check:** ticks from one branch showed as done on the other branch after a switch; fixed and covered by a unit test.
+  - **Tests:** 194 of 194 unit tests; browser checks all pass, with the new `roadmap.mjs` 23/23 and `a11y` 95/95 (now also auditing the roadmap and hand-off); Playwright 29 passed and 1 skipped, with the new `e2e/roadmap.spec.mjs` in three engines.
+
+- **2026-11-16:** Planned Sprint 3, the roadmap to "Send søknad", after four questions to the user. `docs/SPRINTPLAN.md` has the new Sprint 3 with decisions, steps and acceptance; the later sprints are renumbered 4 to 7. No code yet.
+
+- **2026-11-16:** PR #14 (step 7: browser tests in CI and Playwright) merged. **Sprint 2 is complete.**
+  - **Staging:** it serves the PR's CSS fix, and all eight browser checks pass there (`npm run test:browser -- <staging URL>`). Local `main` is at `620a4cd`.
+  - **Rate limit:** polling `gh-runs.mjs` every 15 seconds across three CI runs used up GitHub's 60 anonymous requests per hour, so the deploy run's status could not be read; staging was verified by its content instead. Poll every 30 to 60 seconds.
+  - **Status:** these edits are uncommitted on `main`; they go in with the next branch.
+
 - **2026-11-16:** Sprint 2, step 7, on branch `sprint-2-browser-ci`. Committed and PR opened.
   - **Runner:** `scripts/browser-checks.mjs` serves the production build, runs the eight checks and stops the server. Locally: 8 of 8 pass.
   - **Playwright:** `e2e/pointer.spec.mjs` (6 tests × 3 engines) and `e2e/touch.spec.mjs` (3 tests × 2 phones). Locally: 23 pass, 1 skipped by design (single-finger drag needs a real touch point, Chromium only), three runs in a row.
@@ -82,6 +105,7 @@ Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it sho
   - **Lockfile:** npm re-indented all of `package-lock.json`; the formatting was restored so the diff is 46 lines.
   - **First CI run failed** in `npm run test:browser` after about 50 seconds. The job log needs a GitHub login, so the runner now writes each failing check as an `::error` annotation, which the public API returns. The Playwright steps now run even when the Chrome checks fail.
   - **Second CI run:** Playwright passed on Linux in all engines, and 7 of 8 Chrome checks passed. `a11y` failed on phone width: Linux's wider font pushed the step label "Prosjektkontroll" into the next step. Reproduced locally by widening the labels 25 %, and fixed in CSS (each step is at least as wide as its label).
+  - **Third CI run (43968133849) is green** on commit `6d6dd91`: all three jobs, including "Browser checks". The PR is ready to merge. This log line is uncommitted on the branch and goes in with the next branch.
   - **Stop hook:** it only counts Edit and Write calls, so a `MEMORY.md` update made through a shell script looks like no update. Edit this file with the Edit tool.
 
 - **2026-11-16:** PR #13 (step 6b: pinch zoom and keyboard access) merged.

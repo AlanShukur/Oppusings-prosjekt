@@ -28,8 +28,13 @@ try {
   await evaluate(`document.querySelector('#first-project-btn').click()`);
   await until(`!!document.querySelector('#create-project-submit')`, 'create-project form');
   await evaluate(`document.querySelector('#create-project-name').value = 'QA-hus'; document.querySelector('#create-project-submit').click()`);
-  await until(`!!window.romly.getActiveRecord() && !!document.querySelector('#file-input')`, 'project created', 30000);
+  await until(`!!window.romly.getActiveRecord() && !!document.querySelector('#roadmap .roadmap-step')`, 'project created', 30000);
   check('creating a project works', true);
+  // A new project opens on its roadmap, with only the first step done. Grunnlag is one click away.
+  const fresh = await evaluate(`({done: [...document.querySelectorAll('#roadmap [data-status="done"]')].map(el => el.dataset.step), next: document.querySelector('#roadmap [data-status="next"]')?.dataset.step, last: [...document.querySelectorAll('#roadmap [data-branch="soknad"] .roadmap-step h3')].at(-1)?.firstChild.textContent})`);
+  check('a new project opens on its roadmap, ending in «Send søknad»', fresh.done.join() === 'project' && fresh.next === 'ground' && fresh.last === 'Send søknad', JSON.stringify(fresh));
+  await evaluate(`document.querySelector('#roadmap [data-step="ground"] [data-roadmap-action="ground"]').click()`);
+  await until(`!!document.querySelector('#upload-list')`, 'Grunnlag');
 
   // Upload through the real file input; the file stays in IndexedDB.
   const png = join(b.out, 'plan.png');
@@ -49,6 +54,8 @@ try {
   await until(`window.romly?.getActiveRecord()?.id === ${JSON.stringify(id)}`, 'reopened project', 30000);
   const reopened = await evaluate(`({room: romly.editor.getState().rooms.find(r => r.id === 'bed1')?.name, files: romly.getUploads()})`);
   check('project and file survive a reload', reopened.room === 'Kontor på loftet' && reopened.files === 1, JSON.stringify(reopened));
+  await until(`!!document.querySelector('#roadmap .roadmap-step')`, 'roadmap after reload');
+  check('the reopened project shows its roadmap with the upload ticked off', await evaluate(`document.querySelector('#roadmap [data-step="ground"]').dataset.status === 'done' && document.querySelector('#roadmap-label').textContent === 'Veikart · 2 av 7'`), await evaluate(`document.querySelector('#roadmap-label').textContent`));
 
   // The TEK17 check opens and lists results for the example home.
   await evaluate(`document.querySelector('#check-btn').click()`);

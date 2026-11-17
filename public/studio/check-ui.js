@@ -7,6 +7,7 @@ import { openDialog, closeDialog } from './dialog.js';
 import { FACT_QUESTIONS, factValue } from './facts.js';
 import { projectBrief } from './brief.js';
 import { persist } from './projects.js';
+import { setRoadmapFlag } from './roadmap-ui.js';
 
 function factField(question){
   const value=factValue(studio.project,question),name=`${question.group}.${question.key}`,hint=question.hint?`<small>${esc(question.hint)}</small>`:'';
@@ -41,6 +42,7 @@ function renderCheckResults(){
 export function openCheck(){
   openDialog('Et steg nærmere realisering','Veiledende kontroll av tegningen mot TEK17.',`<div id="check-results"></div><details class="facts-form" id="facts-form"><summary>Om boligen og tiltaket</summary><div class="facts-grid">${FACT_QUESTIONS.map(factField).join('')}</div></details><div class="notice">${icon('info')}<p>${esc(DISCLAIMER)} Ingen søknad sendes fra Romly.</p></div>`,`<button class="button secondary" id="check-back">Tilbake til tegningen</button><button class="button primary" id="download-review">${icon('download')} Last ned prosjektbrief</button>`,true);
   const report=renderCheckResults();$('#facts-form').open=report.summary.ukjent>=3;
+  if(!editor.isExample()&&editor.getState().rooms.length)setRoadmapFlag('checkSeen',true);
   $('#check-back').onclick=closeDialog;$('#download-review').onclick=downloadReport;
   $('#facts-form').addEventListener('change',e=>{const field=e.target.closest('[data-fact]');if(!field)return;const question=FACT_QUESTIONS.find(q=>`${q.group}.${q.key}`===field.dataset.fact);if(!question)return;if(!setFact(question,field.value)){field.value=factValue(studio.project,question)===undefined?'':question.type==='number'||question.type==='integer'?inputNumber(factValue(studio.project,question)):String(factValue(studio.project,question));return;}renderCheckResults();});
   $('#check-results').onclick=e=>{
@@ -51,4 +53,4 @@ export function openCheck(){
     if(e.target.closest('[data-open-facts]')){$('#facts-form').open=true;$('#facts-form').scrollIntoView({block:'start',behavior:'smooth'});$('#facts-form [data-fact]')?.focus({preventScroll:true});}
   };
 }
-export function downloadReport(){download('romly-prosjektbrief.txt',projectBrief(editor.getState(),studio.project,{example:editor.isExample()}),'text/plain;charset=utf-8');toast('Prosjektbriefen er lastet ned.');}
+export function downloadReport(){download('romly-prosjektbrief.txt',projectBrief(editor.getState(),studio.project,{example:editor.isExample()}),'text/plain;charset=utf-8');toast('Prosjektbriefen er lastet ned.');setRoadmapFlag('briefDownloaded',true);}

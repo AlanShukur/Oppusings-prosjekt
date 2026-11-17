@@ -19,7 +19,7 @@ function baselineSummary(diff){
   if(facade)lines.push(count(facade,'endring','endringer')+' av vinduer eller dører i yttervegg');
   return lines;
 }
-function openBaseline(){
+export function openBaseline(){
   const state=editor.getState(),saved=state.baseline;
   if(!saved){
     const bearing=(state.walls||[]).filter(note=>note.loadBearing==='yes').length;

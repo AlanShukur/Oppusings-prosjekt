@@ -79,6 +79,21 @@ It skips disabled controls (exempt from contrast rules), SVG text in the drawing
 
 It also skips `.visually-hidden` text, which is for screen readers only.
 
+## Roadmap check
+
+```bash
+node .claude/skills/romly-browser-qa/roadmap.mjs <base-url>
+```
+
+Run this after changing the roadmap, the check's application rules, or anything a roadmap step reads (uploads, the baseline, wall marks, the questions). It follows one project from start to finish:
+- **New project:** it opens on «Veien til søknad» with 7 steps, a split, and «Send søknad» last; only «Opprett prosjektet» is done.
+- **Ticking off:** drawing a home, saving today's layout from the step, marking a load-bearing wall and answering the questions tick the steps off, and the header button counts along.
+- **The branch:** the chart takes «Krever trolig søknad»; the other way says «Ikke aktuelt nå».
+- **Finishing:** the manual ticks, the brief, and the «Send søknad» hand-off (DiBK links, "Romly sender ingenting", never "godkjent").
+- **Reload and switch:** a reload reopens the roadmap with the same ticks; a non-load-bearing wall switches to «Ser ikke ut til å kreve søknad».
+
+**New projects open on the roadmap,** not on Grunnlag. A check that needs the studio closes it with `#roadmap-close`; one that needs Grunnlag clicks the step's `[data-roadmap-action="ground"]` button.
+
 ## Touch and keyboard check
 
 ```bash

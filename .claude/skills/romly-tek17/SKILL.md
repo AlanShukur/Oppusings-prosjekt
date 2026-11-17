@@ -54,6 +54,7 @@ add(ruleId, ref, title, status, message, {roomId})
   1. A question in `FACT_QUESTIONS` in `facts.js`, or a field in the room or item inspector (`inspector.js`). A new question shows up in the facts form (`check-ui.js`) and in the brief's answers by itself.
   2. An entry in the allowlist in `lib/projects-api.mjs`, with a range.
   3. A test.
+- **The roadmap reads the check** (`roadmapBranch` in `roadmap.js`) to choose «Krever trolig søknad» or «Ser ikke ut til å kreve søknad». It looks at the statuses of the application rules (`pbl-20-1`, `pbl-20-5`, `bruksendring`, `innvendig`) and at the one result marked `{exempt: true}` (the "Ikke-bærende vegger" exemption). Keep that marker on the exemption result, and add any new application rule id to `APPLICATION_RULES`.
 - **The project brief** is `projectBrief(state, project, {example, date})` in `brief.js`: pure, and tested in `tests/brief.test.mjs`. It lists every result with its source, so a new rule needs no change there.
 
   See **romly-studio** for which files change together.
