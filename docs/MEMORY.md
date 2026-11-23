@@ -9,7 +9,7 @@ Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it sho
   - landing and legal pages;
   - crash reports;
   - staging and production deploys.
-- **Staging:** https://romly-staging.romly.workers.dev. It deploys automatically on every merge to `main`. Last checked 2026-11-16: smoke 13/13, dialogs 35/35, furniture 16/16, a11y 71/71, touch-keyboard 21/21, plan-version 10/10, walls 17/17 and baseline 15/15 on `main` at `620a4cd` (after PR #14).
+- **Staging:** https://romly-staging.romly.workers.dev. It deploys automatically on every merge to `main`. Last checked 2026-11-17: all nine browser checks pass (smoke 15/15, dialogs 36/36, roadmap 23/23, furniture 16/16, a11y 95/95, touch-keyboard 21/21, plan-version 10/10, walls 17/17, baseline 15/15) on `main` at `a2504e4` (after PR #15).
 - **Production:** https://romly.romly.workers.dev has not been deployed yet.
 - **Sprint 2 is complete** (`docs/SPRINTPLAN.md`):
   - Step 1 is merged (PR #6): the plan format version and migrations.
@@ -22,11 +22,19 @@ Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it sho
     - **6a (text and contrast)** is merged (PR #12).
     - **6b (pinch zoom and keyboard access to the drawing)** is merged (PR #13).
   - Step 7 (browser tests in CI, plus Playwright) is merged (PR #14). CI now runs the browser checks and Playwright on every PR.
-- **Sprint 3 is the roadmap to "Send søknad"** (added by the user 16.11.2026; AI interpretation moved to Sprint 4). All three steps (logic, start screen, hand-off) are in an open PR (branch `sprint-3-roadmap`).
-- **Tests:** 194 unit tests (`npm test`); 30 Playwright tests (`npm run test:e2e`). Browser checks in `romly-browser-qa`: `smoke.mjs`, `dialogs.mjs`, `roadmap.mjs`, `furniture.mjs`, `a11y.mjs`, `touch-keyboard.mjs`, `plan-version.mjs`, `walls.mjs` and `baseline.mjs`.
+- **Sprint 3 is the roadmap to "Send søknad"** (added by the user 16.11.2026; AI interpretation moved to Sprint 4). It is merged (PR #15) and live on staging: the logic, the start screen and the «Send søknad» hand-off. Sprint 3 is complete. Next in the plan is Sprint 4, AI floor-plan interpretation.
+- **Sprint 4 (AI floor-plan reading) has started.** Step 1, the photo tools, is committed and pushed on branch `sprint-4-photo-tools` (PR waiting to be created and merged). Steps 2–4 (the `/api/analyze` endpoint, the correction step, the evaluation set) follow.
+- **Tests:** 206 unit tests (`npm test`); 30 Playwright tests (`npm run test:e2e`). Browser checks in `romly-browser-qa`: `smoke.mjs`, `dialogs.mjs`, `roadmap.mjs`, `photo-tools.mjs`, `furniture.mjs`, `a11y.mjs`, `touch-keyboard.mjs`, `plan-version.mjs`, `walls.mjs` and `baseline.mjs`.
 
 ## Decisions
 
+- **AI floor-plan reading, Sprint 4 (2026-11-17):** the user's answers.
+  - **Provider:** the Claude API, called directly from the Worker with one key as a Cloudflare secret. It can't be pinned to the EU (only global or US); Claude on AWS Bedrock in an EU region is the fallback if the legal review asks for it.
+  - **Consent:** every time. A «Tolk med AI» button says what is sent and to whom; nothing leaves the device without that click. Update the privacy page (it promises this) before the feature ships.
+  - **Cost:** at most 5 analyses per IP address per day, a total daily cap, and a monthly spending limit in the Anthropic console.
+  - **Evaluation:** generated test drawings with known answers first; real plans later, the user's own or used with permission.
+  - **No project id on the server:** projects live on the device, so the endpoint takes the image and stores nothing.
+- **Photo tools (2026-11-17):** a rotated or straightened drawing is saved as its own file («… (rettet)»), JPEG for photos and PNG for drawings and PDFs; the original is kept. Corrections are not stored in the plan.
 - **Roadmap (2026-11-16):** the user's answers for Sprint 3.
   - **Placement:** the project start screen in the studio.
   - **Final step:** "Send søknad" is a hand-off (documents plus a link to where applications are submitted); Romly sends nothing.
@@ -71,8 +79,9 @@ Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it sho
 
 ## Waiting on the user
 
-- **Merge the Sprint 3 PR** (branch `sprint-3-roadmap`) once CI is green. After merging, verify staging with `npm run test:browser -- https://romly-staging.romly.workers.dev`. The production deploy is still open and user-run.
-- **The four-step bar** (Grunnlag → Prosjektkontroll) overlaps with the roadmap. Decide whether to keep it once you have seen the roadmap.
+- **Sprint 4 step 1 (photo tools):** committed as `48555f0` on `sprint-4-photo-tools` and pushed; the user clicks «Create pull request» on the prefilled page, then merges once CI passes.
+- **Before Sprint 4 step 2 can run for real:** create an Anthropic API key, store it as the Cloudflare secret `ANTHROPIC_API_KEY` on both Workers (`romly-staging` and `romly`), and set a monthly spending limit in the Anthropic console. Step 2 can be built and tested without it.
+- **Old four-step bar:** decide whether to keep it now that the roadmap exists.
 - **Production deploy:** run *Actions → Deploy → Run workflow → production* as a new run. Optionally add a required reviewer on the `production` environment.
 - **Legal:** fill in `lib/company.ts` and get the legal review (`docs/LEGAL-REVIEW.md`). The legal pages show a draft notice until `legalReviewed` is true.
 - **Analytics:** decide whether to add any.
@@ -81,6 +90,18 @@ Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it sho
 - **Open request:** fixing what /usage flagged and moving search agents to a cheaper model needs the /usage output first. Show each change before making it.
 
 ## Task log (newest first)
+
+- **2026-11-23:** CI on the `sprint-4-photo-tools` PR failed in "Browser checks". Only `smoke` failed, because Chrome didn't start within the harness's 20 s on the fresh runner. The other checks, Playwright (29 passed, 1 skipped), lint, build and tests all passed. Fix: `qa-harness.mjs` waits up to 60 s and fails fast if Chrome exits; `browser-checks.mjs` retries a check once on "Chrome did not start". Verified locally: smoke 15/15 against staging, and a missing Chrome fails in about 1 s. Pushed to the same PR together with the skill and memory edits.
+
+- **2026-11-23:** The user said the PR page for `sprint-4-photo-tools` didn't open. Their screenshot showed it had opened, but Brave was signed out of GitHub, so the compare page showed no pull-request form. I asked them to sign in and reopen the prefilled link. `romly-ship` now says to always put the link in the chat, encode `( ) ' * !` so it survives as a Markdown link, and treat "didn't open" as possibly signed out.
+
+- **2026-11-17:** Sprint 4 started ("go with next step"). The user chose all four recommended options: Claude API direct, consent every time, 5 per IP per day plus a daily cap, generated test plans first (recorded in Decisions and `SPRINTPLAN.md`). Step 1, the photo tools, built on branch `sprint-4-photo-tools`; committed (`48555f0`) and pushed on 2026-11-23 at the user's "yes", PR page opened.
+  - **What:** rotate left/right, «Beskjær og rett opp» with four draggable corner handles (mouse, touch, arrow keys), dimensions in m/cm/mm, and an optional second dimension across that fixes a photo's proportions. A corrected drawing is saved as «… (rettet).jpg/png» next to the original; the plan format is unchanged.
+  - **Code:** new pure `photo-correct.js`; `reference-loader.js` gained `axisScales`, `lengthInMeters`, `blobPixels` and `pixelsBlob`; `plan-import.js` rewritten around a measure/straighten mode; three icons in `ui.js`; styles in `import.css`.
+  - **Tests:** 206 unit tests (12 new in `photo-correct.test.mjs` and `reference-loader.test.mjs`); all ten browser checks pass on the dev server, including the new `photo-tools.mjs` (25/25), which is now in CI's `CHECKS`.
+  - **Learned:** straightening by four corners only estimates proportions (737 × 551 instead of 1.5:1 in the test photo), which is why the second dimension exists; the browser check asserts the estimate's formula, not the true ratio.
+
+- **2026-11-17:** PR #15 (Sprint 3: the roadmap) merged. CI passed on the PR and on `main`; deploy run 44141076867 succeeded. All nine browser checks pass against staging (`npm run test:browser -- <staging URL>`). Local `main` is at `a2504e4`. These memory and sprint-plan edits are uncommitted on `main`; they go in with the next branch.
 
 - **2026-11-17:** Sprint 3, the roadmap to "Send søknad", all three steps on branch `sprint-3-roadmap`. Committed and PR opened.
   - **Sources:** DiBK's "Send nabovarsel" and "Stegene fra idé til ferdig søknad" pages, checked 16.11.2026: neighbours are notified before applying with at least two weeks' deadline; the receipt goes with the application; larger projects need ansvarlige foretak, and then the ansvarlig søker sends the application.

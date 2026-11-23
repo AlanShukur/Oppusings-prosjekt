@@ -6,7 +6,7 @@ import { existsSync, openSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const CHECKS = ['smoke', 'dialogs', 'roadmap', 'furniture', 'a11y', 'touch-keyboard', 'plan-version', 'walls', 'baseline'];
+const CHECKS = ['smoke', 'dialogs', 'roadmap', 'photo-tools', 'furniture', 'a11y', 'touch-keyboard', 'plan-version', 'walls', 'baseline'];
 const port = 8791;
 let base = process.argv[2], server = null;
 
@@ -47,8 +47,13 @@ if (!base) {
 const failed = [];
 for (const check of CHECKS) {
   console.log(`\n=== ${check} ===`);
-  const result = spawnSync(process.execPath, [`.claude/skills/romly-browser-qa/${check}.mjs`, base], { encoding: 'utf8' });
-  const output = (result.stdout || '') + (result.stderr || '');
+  const run = () => spawnSync(process.execPath, [`.claude/skills/romly-browser-qa/${check}.mjs`, base], { encoding: 'utf8' });
+  let result = run(), output = (result.stdout || '') + (result.stderr || '');
+  // A slow Chrome launch on a fresh CI runner is not a failure of the app: try that check once more.
+  if (result.status !== 0 && output.includes('Chrome did not start')) {
+    console.log(`Chrome did not start for ${check}; trying once more.\n${lastLines(output, 3)}`);
+    result = run(); output = (result.stdout || '') + (result.stderr || '');
+  }
   process.stdout.write(output);
   if (result.status === 0) continue;
   failed.push(check);

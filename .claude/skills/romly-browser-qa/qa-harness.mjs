@@ -17,7 +17,9 @@ export async function openBrowser({base, width = 1366, height = 900, mobile = fa
   const chrome = spawn(CHROME, ['--headless=new', '--no-sandbox', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
     '--remote-debugging-port=0', '--user-data-dir=' + profile, 'about:blank'], {windowsHide: true, stdio: 'ignore'});
   const errors = [], apiRequests = [], results = [], pending = new Map();
-  let ws, id = 0;
+  let ws, id = 0, exited = null;
+  chrome.on('exit', code => { exited = code; });
+  chrome.on('error', error => { exited = error.message; });
 
   const close = async () => {
     try { ws?.close(); } catch {}
@@ -28,11 +30,12 @@ export async function openBrowser({base, width = 1366, height = 900, mobile = fa
 
   try {
     // Chrome writes the port it picked into DevToolsActivePort, so parallel runs never collide.
+    // The first launch on a fresh CI runner can take well over 20 s, so wait up to a minute unless Chrome quits.
     let port;
-    for (let i = 0; i < 80 && !port; i++) {
+    for (let i = 0; i < 240 && !port && exited === null; i++) {
       try { port = (await readFile(join(profile, 'DevToolsActivePort'), 'utf8')).split('\n')[0].trim(); } catch { await pause(250); }
     }
-    if (!port) throw Error('Chrome did not start. Set CHROME_PATH if it is not at ' + CHROME);
+    if (!port) throw Error(`Chrome did not start (${exited === null ? 'no answer within 60 s' : 'it exited: ' + exited}). Set CHROME_PATH if it is not at ${CHROME}`);
     const targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json();
     ws = new WebSocket(targets.find(t => t.type === 'page').webSocketDebuggerUrl);
     await new Promise((resolve, reject) => { ws.addEventListener('open', resolve, {once: true}); ws.addEventListener('error', reject, {once: true}); });
