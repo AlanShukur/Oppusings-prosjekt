@@ -124,7 +124,7 @@ Waiting on you:
 
 *Added 16.11.2026 at the user's request; the sprints below moved down one number.*
 
-*Status 17.11.2026:* all three steps are built on branch `sprint-3-roadmap` and the acceptance scenario passes in the browser (`roadmap.mjs`). In an open PR, waiting for review and merge.
+*Status 17.11.2026:* done. Merged in PR #15 and live on staging; the acceptance scenario passes there (`roadmap.mjs`).
 
 - **What it is:** a flowchart that is the first thing you see when you open a project. It runs from the start at the top to "Send søknad" at the bottom, shows which steps are needed, and updates as each step is done.
 - **Decided with the user:**
@@ -140,6 +140,22 @@ Waiting on you:
 - *Acceptance:* open a new project and see the roadmap with only the first step done. Trace a plan, save today's layout, remove a load-bearing wall and answer the questions: the steps tick off one by one, the chart takes the "krever trolig søknad" branch, and the last step offers the documents and the link to submit.
 
 ### Sprint 4: AI floor-plan interpretation (vision step 1)
+
+*Decided with the user 17.11.2026 (decision 2 in section 3):*
+- **Provider:** the Claude API, called directly from the Worker with one API key stored as a Cloudflare secret. Inference can't be pinned to the EU there (only global or US); Claude on AWS Bedrock in an EU region is the fallback if the legal review asks for EU processing, and is a small code change.
+- **Consent:** asked every time. A «Tolk med AI» button says what is sent and to whom, and nothing leaves the device without that click. The privacy page is updated before the feature ships.
+- **Cost without accounts:** at most 5 analyses per IP address per day, a total cap per day, and a monthly spending limit the user sets in the Anthropic console.
+- **Evaluation:** generated test drawings with known answers now; real Norwegian plans (the user's own, or used with permission) are added later.
+
+*Because projects are now stored on the device, the endpoint takes the image itself instead of a project id, and stores nothing.*
+
+**Steps:**
+1. Photo tools in the import dialog: rotate, crop and straighten with four corners, and set the scale from a dimension written in the drawing (mm, cm or m), with an optional second dimension across to fix the proportions of a photo. No AI. *Status 17.11.2026: built on branch `sprint-4-photo-tools`; 206 unit tests and all ten browser checks (new: `photo-tools.mjs`, 25/25) pass locally.*
+2. `POST /api/analyze` with consent, limits and cost logging, plus the privacy page.
+3. The correction step.
+4. The evaluation set and a scoring script.
+
+**Original scope:**
 - Server endpoint `POST /api/projects/:id/analyze`. It sends the uploaded plan to a vision model and returns rooms, walls, openings and a scale guess with confidence, using the same plan JSON. Quotas per user, cost logging, and stored results (PG-1, PG-7).
 - A correction step: AI results appear as a suggestion over the traced underlay, and the user accepts, adjusts or rejects each one. Nothing is saved without confirmation.
 - Photo import gets rotation, cropping and perspective correction (R3D-3), plus a scale picked from a dimension in the drawing.

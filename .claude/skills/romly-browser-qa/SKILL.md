@@ -14,7 +14,7 @@ Unit tests (`npm test`) cover the pure modules. This skill covers what only show
 ## Everything at once, and CI
 
 ```bash
-npm run build && npm run test:browser      # all eight checks below, against a local production build
+npm run build && npm run test:browser      # all ten checks below, against a local production build
 npm run test:browser -- https://romly-staging.romly.workers.dev   # or against a running site
 npm run test:e2e                            # Playwright: pointer, keyboard and touch in Chromium, Firefox and WebKit
 ```
@@ -93,6 +93,20 @@ Run this after changing the roadmap, the check's application rules, or anything 
 - **Reload and switch:** a reload reopens the roadmap with the same ticks; a non-load-bearing wall switches to «Ser ikke ut til å kreve søknad».
 
 **New projects open on the roadmap,** not on Grunnlag. A check that needs the studio closes it with `#roadmap-close`; one that needs Grunnlag clicks the step's `[data-roadmap-action="ground"]` button.
+
+## Photo tools check
+
+```bash
+node .claude/skills/romly-browser-qa/photo-tools.mjs <base-url>
+```
+
+Run this after changing the import dialog, `photo-correct.js` or the calibration in `reference-loader.js`. It builds its own test photo in the page: a 12 × 8 m plan, warped onto a grey table with the real `homography` from `photo-correct.js` (loaded with a dynamic `import('/studio/photo-correct.js')`), turned sideways and saved as a JPEG. Then:
+- **Rotate and straighten:** «Roter mot høyre» turns it upright. The four corner handles are dragged with real mouse events onto the plan's corners, and one is moved with the arrow keys. «Rett opp» must leave no grey table along the edges.
+- **Scale:** 10 000 mm one way and 6 000 mm across must give exactly 12 × 8 m. Without the second dimension the proportions are only the side-length estimate, so don't assert them.
+- **Saving:** the reference is the «(rettet).jpg» copy, it reloads from IndexedDB, and Grunnlag lists both files.
+- **Phone:** at 390 px the dialog has no sideways scroll, and a corner drags with touch events (`Input.dispatchTouchEvent` after `Emulation.setTouchEmulationEnabled`).
+
+To place a click at a point in the picture, map it through `#calibration-svg`'s `getScreenCTM()`. The SVG letterboxes the image and, while straightening, adds a margin around it.
 
 ## Touch and keyboard check
 

@@ -22,7 +22,7 @@ Romly is a Norwegian renovation planner. The **studio** (`public/studio/`) is a 
 | `inspector.js` | The rooms list and the Egenskaper panels for a room, an element (with furniture size and door hinge) or a wall. |
 | `tools.js` | Tools, zoom (`setZoom`, `showZoom`), 2D/3D, layers, the Interiør list (built from `FURNITURE`), "Legg til rom", the keyboard shortcuts and their dialog. |
 | `baseline-ui.js` | The "Dagens planløsning" button and dialog. |
-| `plan-import.js` | Your own floor plan: upload, setting the scale (calibration), and the reference image under the drawing. |
+| `plan-import.js` | Your own floor plan: upload, the photo tools (rotate, «Beskjær og rett opp» with four corner handles), setting the scale (calibration, in m/cm/mm, with an optional second dimension across), and the reference image under the drawing. A rotated or straightened drawing is uploaded as a separate «… (rettet).jpg/png» file and becomes the reference; the original stays under Grunnlag. Nothing about the correction is stored in the plan, so the plan format didn't change. |
 | `ground.js`, `suggestions.js`, `check-ui.js` | Steps 1, 2 and 4: Grunnlag (details and files), Planforslag (needs and example variants), and Prosjektkontroll (the TEK17 dialog and facts form). |
 | `roadmap.js`, `roadmap-ui.js` | The roadmap to «Send søknad»: `buildRoadmap` (pure: steps, status, the branch after the check) and the start screen that draws it, plus the «Send søknad» hand-off. A project opens on it (`applyCloudRecord` calls `openRoadmap`), and the header button `#roadmap-btn` shows the progress. |
 | `facts.js`, `brief.js` | Pure: the facts questionnaire (`FACT_QUESTIONS`), and the downloadable project brief (`projectBrief`). |
@@ -42,7 +42,8 @@ Romly is a Norwegian renovation planner. The **studio** (`public/studio/`) is a 
 | `local-store.js` | On-device storage in IndexedDB. It keeps the same contract as the server API: revisions, limits, file sniffing, atomic deletes, `romly-backup-v1` export. |
 | `cloud.js` | `ApiError`, the server API client (unused for now), and `ProjectSync` (autosave, revision conflicts, retries). |
 | `error-reporter.js` | Sends crash reports to `/api/client-errors`. Bump `RELEASE` when shipping a new sprint. |
-| `reference-loader.js` | Imports PDF and image floor plans (pdf.js). |
+| `reference-loader.js` | Imports PDF and image floor plans (pdf.js) at most 2048 px and 4 megapixels. `calibrateReference` turns one or two measured dimensions into the reference size; with two (`axisScales`), the scale across and down can differ, which corrects a straightened photo's proportions. `blobPixels` and `pixelsBlob` move between an image blob and RGBA pixels. |
+| `photo-correct.js` | Pure, no DOM: `rotatePixels` (quarter turns), `warpPixels` (four corners onto a flat rectangle, via `homography`, bilinear, white outside the photo), `orderCorners`, `validQuad`, `correctedSize`. Straightening only estimates proportions (the average of opposite sides); the second dimension in calibration is what makes them exact. |
 | CSS | `style.css`, `layout.css`, `projects.css`, `import.css` and `studio-extra.css`. New styles go in `studio-extra.css`. |
 
 ### How the UI modules fit together

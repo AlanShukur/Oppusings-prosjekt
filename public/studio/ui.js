@@ -38,7 +38,10 @@ file:'<path d="M5 2h9l5 5v15H5zM14 2v6h5M8 13h8m-8 4h8"/>',
 warning:'<path d="m12 3 10 18H2zM12 9v5m0 3h.01"/>',download:'<path d="M12 3v13m-5-5 5 5 5-5M4 17v4h16v-4"/>',
 image:'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8" cy="8" r="2"/><path d="m3 17 5-5 4 4 4-6 5 7"/>',
 document:'<path d="M5 2h14v20H5zM8 7h8m-8 5h8m-8 5h5"/>',
-hand:'<path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12m0-1.5v-6a1.5 1.5 0 0 1 3 0V12m0-5.5a1.5 1.5 0 0 1 3 0V13m0-3.5a1.5 1.5 0 0 1 3 0V15a7 7 0 0 1-7 7h-1.5a7 7 0 0 1-5.6-2.8L4 16.5a1.6 1.6 0 0 1 2.5-2L8 16"/>'
+hand:'<path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12m0-1.5v-6a1.5 1.5 0 0 1 3 0V12m0-5.5a1.5 1.5 0 0 1 3 0V13m0-3.5a1.5 1.5 0 0 1 3 0V15a7 7 0 0 1-7 7h-1.5a7 7 0 0 1-5.6-2.8L4 16.5a1.6 1.6 0 0 1 2.5-2L8 16"/>',
+'rotate-left':'<path d="M3 4v5h5"/><path d="M3.5 13a8.5 8.5 0 1 0 2.2-6.1L3 9"/>',
+'rotate-right':'<path d="M21 4v5h-5"/><path d="M20.5 13a8.5 8.5 0 1 1-2.2-6.1L21 9"/>',
+crop:'<path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/>'
 };
 export const icon=(name)=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name]||paths.home}</svg>`;
 export function icons(root=document){root.querySelectorAll('[data-icon]').forEach(el=>el.innerHTML=icon(el.dataset.icon));}
