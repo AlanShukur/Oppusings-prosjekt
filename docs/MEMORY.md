@@ -23,7 +23,7 @@ Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it sho
     - **6b (pinch zoom and keyboard access to the drawing)** is merged (PR #13).
   - Step 7 (browser tests in CI, plus Playwright) is merged (PR #14). CI now runs the browser checks and Playwright on every PR.
 - **Sprint 3 is the roadmap to "Send søknad"** (added by the user 16.11.2026; AI interpretation moved to Sprint 4). It is merged (PR #15) and live on staging: the logic, the start screen and the «Send søknad» hand-off. Sprint 3 is complete. Next in the plan is Sprint 4, AI floor-plan interpretation.
-- **Sprint 4 (AI floor-plan reading) has started.** Step 1, the photo tools, is built on branch `sprint-4-photo-tools` and not committed yet. Steps 2–4 (the `/api/analyze` endpoint, the correction step, the evaluation set) follow.
+- **Sprint 4 (AI floor-plan reading) has started.** Step 1, the photo tools, is committed and pushed on branch `sprint-4-photo-tools` (PR waiting to be created and merged). Steps 2–4 (the `/api/analyze` endpoint, the correction step, the evaluation set) follow.
 - **Tests:** 206 unit tests (`npm test`); 30 Playwright tests (`npm run test:e2e`). Browser checks in `romly-browser-qa`: `smoke.mjs`, `dialogs.mjs`, `roadmap.mjs`, `photo-tools.mjs`, `furniture.mjs`, `a11y.mjs`, `touch-keyboard.mjs`, `plan-version.mjs`, `walls.mjs` and `baseline.mjs`.
 
 ## Decisions
@@ -79,7 +79,7 @@ Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it sho
 
 ## Waiting on the user
 
-- **Sprint 4 step 1 (photo tools):** say whether to commit and open the PR.
+- **Sprint 4 step 1 (photo tools):** committed as `48555f0` on `sprint-4-photo-tools` and pushed; the user clicks «Create pull request» on the prefilled page, then merges once CI passes.
 - **Before Sprint 4 step 2 can run for real:** create an Anthropic API key, store it as the Cloudflare secret `ANTHROPIC_API_KEY` on both Workers (`romly-staging` and `romly`), and set a monthly spending limit in the Anthropic console. Step 2 can be built and tested without it.
 - **Old four-step bar:** decide whether to keep it now that the roadmap exists.
 - **Production deploy:** run *Actions → Deploy → Run workflow → production* as a new run. Optionally add a required reviewer on the `production` environment.
@@ -91,7 +91,11 @@ Claude updates this file at the end of every task (see `CLAUDE.md`). Keep it sho
 
 ## Task log (newest first)
 
-- **2026-11-17:** Sprint 4 started ("go with next step"). The user chose all four recommended options: Claude API direct, consent every time, 5 per IP per day plus a daily cap, generated test plans first (recorded in Decisions and `SPRINTPLAN.md`). Step 1, the photo tools, built on branch `sprint-4-photo-tools`, not committed yet.
+- **2026-11-23:** CI on the `sprint-4-photo-tools` PR failed in "Browser checks". Only `smoke` failed, because Chrome didn't start within the harness's 20 s on the fresh runner. The other checks, Playwright (29 passed, 1 skipped), lint, build and tests all passed. Fix: `qa-harness.mjs` waits up to 60 s and fails fast if Chrome exits; `browser-checks.mjs` retries a check once on "Chrome did not start". Verified locally: smoke 15/15 against staging, and a missing Chrome fails in about 1 s. Pushed to the same PR together with the skill and memory edits.
+
+- **2026-11-23:** The user said the PR page for `sprint-4-photo-tools` didn't open. Their screenshot showed it had opened, but Brave was signed out of GitHub, so the compare page showed no pull-request form. I asked them to sign in and reopen the prefilled link. `romly-ship` now says to always put the link in the chat, encode `( ) ' * !` so it survives as a Markdown link, and treat "didn't open" as possibly signed out.
+
+- **2026-11-17:** Sprint 4 started ("go with next step"). The user chose all four recommended options: Claude API direct, consent every time, 5 per IP per day plus a daily cap, generated test plans first (recorded in Decisions and `SPRINTPLAN.md`). Step 1, the photo tools, built on branch `sprint-4-photo-tools`; committed (`48555f0`) and pushed on 2026-11-23 at the user's "yes", PR page opened.
   - **What:** rotate left/right, «Beskjær og rett opp» with four draggable corner handles (mouse, touch, arrow keys), dimensions in m/cm/mm, and an optional second dimension across that fixes a photo's proportions. A corrected drawing is saved as «… (rettet).jpg/png» next to the original; the plan format is unchanged.
   - **Code:** new pure `photo-correct.js`; `reference-loader.js` gained `axisScales`, `lengthInMeters`, `blobPixels` and `pixelsBlob`; `plan-import.js` rewritten around a measure/straighten mode; three icons in `ui.js`; styles in `import.css`.
   - **Tests:** 206 unit tests (12 new in `photo-correct.test.mjs` and `reference-loader.test.mjs`); all ten browser checks pass on the dev server, including the new `photo-tools.mjs` (25/25), which is now in CI's `CHECKS`.

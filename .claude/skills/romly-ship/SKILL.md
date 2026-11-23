@@ -39,14 +39,19 @@ git push -u origin <branch>
 Build a prefilled compare URL and open it in the user's browser. They only need to click **Create pull request**.
 
 ```bash
-node -e "const [b,t,body]=process.argv.slice(1);console.log('https://github.com/AlanShukur/Oppusings-prosjekt/compare/main...'+b+'?quick_pull=1&title='+encodeURIComponent(t)+'&body='+encodeURIComponent(body))" "<branch>" "<title>" "$(cat <scratchpad>/pr-body.md)" > <scratchpad>/pr-url.txt
+cd <scratchpad> && node -e "const fs=require('fs');const enc=s=>encodeURIComponent(s).replace(/[()'*!]/g,c=>'%'+c.charCodeAt(0).toString(16).toUpperCase());const b='<branch>',t='<title>';fs.writeFileSync('pr-url.txt','https://github.com/AlanShukur/Oppusings-prosjekt/compare/main...'+b+'?quick_pull=1&title='+enc(t)+'&body='+enc(fs.readFileSync('pr-body.md','utf8')))"
 ```
+
+The extra replace encodes `( ) ' * !`, which `encodeURIComponent` leaves alone. Unencoded parentheses break the link when it is pasted into the chat as a Markdown link.
 
 Then open it in PowerShell:
 
 ```powershell
 Start-Process (Get-Content -Raw "<scratchpad>\pr-url.txt").Trim()
 ```
+
+- **Always also put the link in the chat** as a Markdown link, plus the short `https://github.com/AlanShukur/Oppusings-prosjekt/pull/new/<branch>` as a fallback. The user may be following from another device. The default browser is Brave; `rundll32.exe url.dll,FileProtocolHandler <url>` is a second way to open it.
+- **"The PR page didn't open" usually means signed out:** if GitHub isn't signed in in that browser, the compare page shows only the diff ("Comparing changes", 1 commit, files changed, "Able to merge") with **Sign in / Sign up** at the top right, and no pull-request form. Ask the user to sign in there (or use the browser where they're signed in), then reopen the prefilled link. Seen 2026-11-23.
 
 - **The body:** write it to a scratchpad file first, not in the shell. Say what changed, why, and how it was verified (tests, browser QA results). End it with the PR attribution line the harness specifies.
 - **Length:** keep the URL under about 8,000 characters. If it is longer, shorten the body.

@@ -21,6 +21,7 @@ npm run test:e2e                            # Playwright: pointer, keyboard and 
 
 - **CI:** the "Browser checks" job runs both on every PR and on `main`. A new check script must be added to `CHECKS` in `scripts/browser-checks.mjs`, or CI won't run it.
 - **Reading a CI failure:** the job log needs a GitHub login, but the runner writes each failing check as an error annotation. Read them from the public API: find the "Browser checks" check run under `/commits/<sha>/check-runs`, then `/check-runs/<id>/annotations`.
+- **Slow Chrome start on CI:** the first Chrome launch on a fresh runner can take over 20 s. The harness waits up to 60 s (and fails at once if Chrome exits), and `scripts/browser-checks.mjs` re-runs a check once when its output says "Chrome did not start". Seen on PR #16 (2026-11-23): `smoke` failed that way while the other checks passed.
 - **Fonts differ on CI:** GitHub's Linux runners use a wider font than Windows. A layout that only just fits locally can overlap there, as the phone step bar did. To reproduce locally, enlarge the text's `font-size` by 25 % in the page and look for the overlap.
 - **Playwright (`e2e/`):** use it for behaviour that must hold in Firefox and Safari's engine. The checks in this skill use Chrome only.
   - It starts its own dev server on port 5176; set `ROMLY_URL` to test a running site.
